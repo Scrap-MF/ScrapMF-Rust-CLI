@@ -1,0 +1,24 @@
+#!/bin/sh
+# Pre-push gate — nothing reaches the remote without passing validation.
+#
+# Pushing to main  -> full CI parity (just validate, ~5 min)
+# Pushing elsewhere -> fast gate (just quick, ~40s)
+#
+# Requires: just (cargo install just --locked). See justfile for recipes.
+
+set -u
+command -v just >/dev/null 2>&1 || {
+    echo "✖ pre-push: 'just' is required but not installed." >&2
+    echo "  Run: cargo install just --locked" >&2
+    exit 1
+}
+
+target="quick"
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+    if [ "$remote_ref" = "refs/heads/main" ]; then
+        target="validate"
+    fi
+done
+
+echo "→ pre-push gate: running 'just $target'"
+exec just "$target"

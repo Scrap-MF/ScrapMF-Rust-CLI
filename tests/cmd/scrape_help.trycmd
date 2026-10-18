@@ -1,0 +1,21 @@
+```console
+$ scrapmf scrape --help
+Scrape a URL using the configured backend
+
+Usage: scrapmf scrape [OPTIONS] <URL>
+
+Arguments:
+  <URL>  URL to scrape
+
+Options:
+  -o, --output <PATH>                   Output directory
+  -v, --verbose...                      Increase verbosity (-v, -vv)
+      --preset <NAME>                   Preset from presets/
+      --cookies <FILE>                  Cookies file (Netscape cookies.txt)
+      --cookies-from-browser <BROWSER>  Cookies from browser (e.g. firefox, brave, chrome)
+      --dry-run                         Do not download, only print what would be done
+      --no-archive                      Disable the download archive (dedup) for this run
+      --profile-pic-only                Threads only: download profile picture instead of posts
+  -h, --help                            Print help
+
+```

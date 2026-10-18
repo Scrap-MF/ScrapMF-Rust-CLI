@@ -1,0 +1,24 @@
+# Maintainer: Scrap-MF
+# Prebuilt binary package — no Rust toolchain required.
+# See PKGBUILD for the build-from-source variant.
+#
+pkgname=scrapmf-bin
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Safe, interactive archiver for social media galleries (prebuilt binary, musl static)"
+arch=('x86_64')
+url="https://github.com/Scrap-MF/ScrapMF-Rust-CLI"
+license=('GPL3')
+optdepends=('gallery-dl: primary backend'
+            'yt-dlp: reserved for future use (videos backend)')
+provides=('scrapmf')
+conflicts=('scrapmf')
+source=("scrapmf-x86_64-unknown-linux-musl.tar.gz::https://github.com/Scrap-MF/ScrapMF-Rust-CLI/releases/download/v$pkgver/scrapmf-x86_64-unknown-linux-musl.tar.gz")
+# SKIP until tag v1.0.0 is published: the asset does not exist yet. Copy
+# the hash from scrapmf-x86_64-unknown-linux-musl.tar.gz.sha256 of the
+# published release once it exists.
+sha256sums=('SKIP')
+
+package() {
+  install -Dm755 "scrapmf" "$pkgdir/usr/bin/scrapmf"
+}

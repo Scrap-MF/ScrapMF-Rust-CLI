@@ -1,0 +1,71 @@
+[package]
+name = "scrapmf"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Safe, interactive archiver for social media galleries"
+readme = "README.md"
+license = "GPL-3.0-only"
+repository = "https://github.com/Scrap-MF/ScrapMF-Rust-CLI"
+keywords = ["cli", "gallery-dl", "scraping", "orchestrator"]
+categories = ["command-line-utilities"]
+authors = ["Scrap-MF"]
+
+[[bin]]
+name = "scrapmf"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"
+toml = "1.1"
+dirs = "6"
+which = "7"
+url = "2"
+anyhow = "1.0"
+thiserror = "2.0"
+inquire = { version = "0.9.4", features = ["crossterm"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+anstream = "0.6"
+anstyle = "1.0"
+ratatui = "0.29"
+crossterm = "0.28"
+aes = "0.9.2"
+sha1 = "0.11.0"
+sha2 = "0.10"
+rusqlite = { version = "0.32", features = ["bundled"] }
+base64 = "0.23.1"
+pbkdf2 = "0.13.0"
+memchr = "2"
+hex = "0.4"
+
+[dev-dependencies]
+cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
+tempfile = "3.27.0"
+trycmd = "0.14"
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/scrapmf-{ target }.tar.gz"
+bin-dir = "{ bin }{ binary-ext }"
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
+opt-level = "z"
+panic = "abort"
+debug = false
+overflow-checks = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "warn"
+
+[package.metadata.cargo-semver-checks.lints]
+struct_marked_non_exhaustive = "allow"
+constructible_struct_adds_field = "allow"

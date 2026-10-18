@@ -1,0 +1,70 @@
+name: release-plz
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-plz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-plz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # The action authenticates via RELEASE_PLZ_TOKEN (env below);
+          # don't leave the checkout's embedded token on the runner.
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # A PAT is mandatory, not an optimisation. With the automatic GITHUB_TOKEN
+      # release-plz could open the PR but the tag it pushes would not trigger
+      # ci.yml, so the version would be bumped with no binaries published.
+      #
+      # Without this preflight a missing or malformed secret surfaces as
+      # "gh: Bad credentials (HTTP 401)" from deep inside the action, which
+      # says nothing about what is missing. An absent secret is still expanded
+      # by GitHub to an empty string, so the action sees GITHUB_TOKEN as
+      # *defined* and attempts to use it. Fail here instead, with a message
+      # that names the required scopes and the exact steps to fix.
+      - name: Require a token that can open PRs and trigger CI
+        env:
+          RELEASE_PLZ_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+        run: |
+          if [ -z "${RELEASE_PLZ_TOKEN}" ]; then
+            echo "::error::RELEASE_PLZ_TOKEN is not set, empty or invalid."
+            echo ""
+            echo "Create a token and add it as a repository secret:"
+            echo "  1. GitHub → Settings → Developer settings → Personal access tokens"
+            echo "     → Fine-grained tokens → Generate new token"
+            echo "  2. Resource owner: Scrap-MF"
+            echo "     Repository access: select only ScrapMF-Rust-CLI"
+            echo "  3. Repository permissions:"
+            echo "       Contents:     Read and write   (pushes the release tag)"
+            echo "       Pull requests: Read and write   (opens the release PR)"
+            echo "  4. Repo → Settings → Secrets and variables → Actions"
+            echo "     → New repository secret"
+            echo "     Name: RELEASE_PLZ_TOKEN   Secret: <paste the token>"
+            echo ""
+            echo "Docs: https://release-plz.dev/docs/github/token"
+            exit 1
+          fi
+          echo "RELEASE_PLZ_TOKEN is present."
+
+      # NOTE: MarcoIeni/release-plz-action was renamed/moved and its @v1 tag
+      # no longer resolves anywhere — every run failed at "Set up job".
+      # Current canonical reference per release-plz.dev/docs/github/quickstart.
+      - name: Run release-plz
+        uses: release-plz/action@v0.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}

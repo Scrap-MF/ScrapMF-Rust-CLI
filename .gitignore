@@ -1,0 +1,12 @@
+/target/
+**/*.rs.bk
+.env
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+/downloads/
+.agent
+/dump/
+review.md

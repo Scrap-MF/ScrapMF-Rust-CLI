@@ -1,0 +1,277 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, develop]
+  # Manual dry-run: exercises the build matrix without creating a release
+  # (publish stays tag-only). Run it from the Actions tab before a release.
+  workflow_dispatch:
+
+# Consecutive pushes to the same branch supersede older runs — a full gate
+# for a commit we already replaced wastes runner minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Prebuilt binaries — compiling just/nextest/deny from source costs
+      # several minutes per run.
+      - name: Install tools (just · cargo-nextest · cargo-deny)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-nextest,cargo-deny
+
+      # Cache ~/.cargo and target, invalidated by Cargo.lock/rustc changes.
+      - name: Cache build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      # Mirrors `just quick` — keep recipes in justfile as the single source
+      - name: Quick gate (fmt + clippy + tests)
+        run: just quick
+
+      - name: Build release
+        run: cargo build --release
+
+      # Mirrors the deny part of `just validate`
+      # NOTE: no --all-features flag — removed in cargo-deny 0.18+; the
+      # setting lives in .cargo/deny.toml [graph] now.
+      - name: Security policy (cargo-deny)
+        run: cargo deny --config .cargo/deny.toml check
+
+  # Build every target in parallel and upload archives as workflow artifacts.
+  # The release itself is created by the single `publish` job below — matrix
+  # jobs must never call action-gh-release concurrently: they race to create
+  # the same release, losers fail on upload (seen on v1.0.0), and a published
+  # release is immutable so late assets are rejected outright.
+  #
+  # Cross-compiling on ubuntu: Rust bundles the static musl CRT objects, so
+  # the gnu cross-gcc works as the linker for musl targets too. Windows is
+  # built natively with MSVC (standalone exe, no MinGW runtime surprises).
+  build:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    needs: ci
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: armv7-unknown-linux-gnueabihf
+            os: ubuntu-latest
+          - target: armv7-unknown-linux-musleabihf
+            os: ubuntu-latest
+          - target: riscv64gc-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: powerpc64le-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install cross toolchains (armv7)
+        if: startsWith(matrix.target, 'armv7-')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf
+      - name: Install cross toolchains (aarch64)
+        if: startsWith(matrix.target, 'aarch64-')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Install cross toolchains (riscv64 / powerpc64le)
+        if: contains(matrix.target, 'riscv64') || startsWith(matrix.target, 'powerpc64le')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-linux-gnu gcc-powerpc64le-linux-gnu
+      - name: Install musl tools (x86_64)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      # rusqlite (bundled SQLite) compiles C — musl targets need a real musl
+      # cross-gcc or the binary would link glibc and stop being static.
+      # Toolchains from github.com/cross-tools/musl-cross releases (pinned tag,
+      # GitHub-hosted = reliable; musl.cc proved flaky on 2026-08-25).
+      - name: Install musl cross toolchain (aarch64)
+        if: matrix.target == 'aarch64-unknown-linux-musl'
+        run: |
+          cd /tmp
+          curl -fsSL --retry 3 -o tc.tar.xz \
+            https://github.com/cross-tools/musl-cross/releases/download/20260823/aarch64-unknown-linux-musl.tar.xz
+          tar xJf tc.tar.xz
+          echo "/tmp/aarch64-unknown-linux-musl/bin" >> "$GITHUB_PATH"
+      - name: Install musl cross toolchain (armv7)
+        if: matrix.target == 'armv7-unknown-linux-musleabihf'
+        run: |
+          cd /tmp
+          curl -fsSL --retry 3 -o tc.tar.xz \
+            https://github.com/cross-tools/musl-cross/releases/download/20260823/armv7-unknown-linux-musleabihf.tar.xz
+          tar xJf tc.tar.xz
+          echo "/tmp/armv7-unknown-linux-musleabihf/bin" >> "$GITHUB_PATH"
+      - name: Build
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            armv7-*)                    export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc ;;
+            riscv64gc-*)                export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER=riscv64-linux-gnu-gcc ;;
+            powerpc64le-*)              export CARGO_TARGET_POWERPC64LE_UNKNOWN_LINUX_GNU_LINKER=powerpc64le-linux-gnu-gcc ;;
+            aarch64-unknown-linux-gnu)  export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc ;;
+          esac
+          # cc crate: force musl compilers for static musl targets (SQLite C code)
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-musl)  export CC_x86_64_unknown_linux_musl=musl-gcc
+                                        export AR_x86_64_unknown_linux_musl=ar ;;
+            aarch64-unknown-linux-musl) export CC_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-gcc
+                                        export AR_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-ar
+                                        export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-unknown-linux-musl-gcc ;;
+            armv7-unknown-linux-musleabihf) export CC_armv7_unknown_linux_musleabihf=armv7-unknown-linux-musleabihf-gcc
+                                        export AR_armv7_unknown_linux_musleabihf=armv7-unknown-linux-musleabihf-ar
+                                        export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER=armv7-unknown-linux-musleabihf-gcc ;;
+          esac
+          cargo build --release --target ${{ matrix.target }} --locked
+
+      # Regression guard for the Windows CRT. An MSVC exe that links the CRT
+      # dynamically imports VCRUNTIME140.dll, which only exists if the Visual
+      # C++ Redistributable is installed — so "download the exe and run it"
+      # stops being true. .cargo/config.toml pins +crt-static to prevent that;
+      # this step makes sure it actually took effect, because a silently
+      # dropped rustflag would otherwise ship a broken binary again.
+      - name: Verify the exe has no external runtime dependency
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        shell: bash
+        run: |
+          EXE="target/x86_64-pc-windows-msvc/release/scrapmf.exe"
+          if [ ! -f "$EXE" ]; then echo "::error::expected $EXE to exist"; exit 1; fi
+          # dumpbin ships with MSVC on the runner; fall back to objdump, which
+          # Git Bash also provides.
+          if command -v dumpbin >/dev/null 2>&1; then
+            dumpbin /dependents "$EXE" | tr -d '\r'
+          elif command -v objdump >/dev/null 2>&1; then
+            objdump -p "$EXE"
+          else
+            echo "::error::neither dumpbin nor objdump is available to inspect imports"; exit 1
+          fi > imports.txt
+          cat imports.txt
+          # Only DLLs that ship with Windows may remain. Note that msvcrt.dll is
+          # an OS component, but vcruntime140.dll is NOT: it comes from the
+          # Visual C++ Redistributable, which is exactly what this guard exists
+          # to catch — so it is deliberately absent from this list.
+          ALLOWED='^(api-ms-win-|bcryptprimitives|combase|kernel32|ntdll|ole32|oleaut32|shell32|user32|ws2_32|advapi32|crypt32|secur32|shlwapi|msvcrt)'
+          if grep -oiE '[a-z0-9_.-]+\.dll' imports.txt | sort -u | grep -viE "$ALLOWED"; then
+            echo "::error::scrapmf.exe imports a DLL that does not ship with Windows. Add it to ALLOWED here if it is an OS component, or fix +crt-static in .cargo/config.toml."
+            exit 1
+          fi
+          echo "All imported DLLs ship with Windows — the exe is self-contained."
+
+      - name: Create archive
+        shell: bash
+        run: |
+          mkdir -p dist
+          case "${{ matrix.target }}" in
+            *windows*)
+              # Windows gets the exe standalone, because that is what people
+              # actually look for: no extraction step, and a file they can
+              # drop into PATH. The zip is the platform-native container for
+              # anyone who wants the binary as a folder. The tar.gz is kept so
+              # anything already written against the old layout keeps working.
+              cp "target/${{ matrix.target }}/release/scrapmf.exe" dist/scrapmf.exe
+              powershell -NoProfile -Command \
+                "Compress-Archive -Path dist/scrapmf.exe -DestinationPath dist/scrapmf-windows-x86_64.zip -Force"
+              tar czf dist/scrapmf-windows-x86_64.tar.gz -C "target/${{ matrix.target }}/release" scrapmf.exe
+              ;;
+            *)
+              tar czf "dist/scrapmf-${{ matrix.target }}.tar.gz" -C "target/${{ matrix.target }}/release" scrapmf
+              ;;
+          esac
+          # One checksum per artifact. Named individually rather than a single
+          # checksums.txt so the merge-multiple download in the publish job
+          # cannot have two matrix jobs clobber the same file.
+          ( cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done )
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrapmf-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+
+  # Single writer: one job gathers all archives and creates exactly one
+  # release — no races, all-or-nothing visibility.
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - name: Download all archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: scrapmf-*
+          merge-multiple: true
+          path: dist
+      - name: Upload release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body: |
+            ## Windows
+
+            Download **`scrapmf.exe`** — it runs as-is, no extraction needed.
+            Put it anywhere in your `PATH`, then open a **new** terminal and:
+
+            ```
+            scrapmf --version
+            scrapmf setup
+            scrapmf doctor
+            ```
+
+            `setup` downloads the pinned gallery-dl backend; without it
+            `scrapmf` cannot download anything. Use **Windows Terminal** for
+            the interactive menu.
+
+            `scrapmf-windows-x86_64.zip` contains the same executable if you
+            prefer to keep it in a folder.
+
+            ## Linux / macOS
+
+            ```
+            curl -fsSL https://raw.githubusercontent.com/Scrap-MF/ScrapMF-Rust-CLI/main/install.sh | sh
+            ```
+
+            Static musl builds are dependency-free; pick the `.tar.gz`
+            matching your target from the assets below and verify it against
+            the adjacent `.sha256`.

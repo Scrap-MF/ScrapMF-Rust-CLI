@@ -1,0 +1,48 @@
+# release-plz — automated version bumps from Conventional Commits.
+#
+# Flow: push to main → release-plz opens a "chore(release): vX.Y.Z" PR
+# (Cargo.toml + Cargo.lock bump) → merging that PR makes release-plz push
+# the git tag → the existing ci.yml release job builds and publishes binaries.
+#
+# crates.io publication is intentionally disabled; flip `publish` to true
+# when scrapmf is ready for the registry.
+
+[workspace]
+# No CHANGELOG.md by project decision (can be enabled later).
+changelog_update = false
+
+# Our ci.yml release job owns GitHub Release creation — it is the one that
+# attaches the compiled binaries. release-plz only pushes the tag.
+git_release_enable = false
+
+# Branch name of the release PR: `release-plz-<timestamp>`. The trailing
+# hyphen is load-bearing — release-plz concatenates the prefix instead of
+# joining it, so "release-plz" produced branches like
+# `release-plz2026-10-03T05-31-05Z`, and release-plz recognises its own PRs by
+# `starts_with(prefix)` with no base-branch filter, so the prefix has to stay
+# unambiguous. Matches release-plz's own `DEFAULT_BRANCH_PREFIX`.
+pr_branch_prefix = "release-plz-"
+
+[[package]]
+name = "scrapmf"
+publish = false
+# git-only mode: determine the current version from GIT TAGS instead of the
+# cargo registry. scrapmf was never published to crates.io, so without this
+# release-plz could not establish a baseline and silently computed
+# "next version 1.0.0 / already up-to-date" no matter how many feat/fix
+# commits landed. With git_only it reads tag `v1.0.0` and bumps correctly.
+git_only = true
+# Stop cargo-semver-checks from forcing major bumps on internal changes.
+#
+# release-plz defaults to running the API check whenever the package looks
+# like a library, and scrapmf has no explicit [lib] section, so it qualified.
+# That check compares the *public Rust API* between releases, and it does not
+# know nobody imports this crate: `publish = false`, crates.io is off, the
+# artifact is a binary. Adding a variant to a `pub enum FailureKind` was
+# enough to turn a fix release into 2.0.0 — a change that would never reach a
+# single consumer.
+#
+# Without this, version follows Conventional Commits: feat -> minor,
+# fix -> patch. If scrapmf is ever published as a library that others depend
+# on, delete this line and the semver guarantee comes back with it.
+semver_check = false

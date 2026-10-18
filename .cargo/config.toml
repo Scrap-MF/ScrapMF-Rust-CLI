@@ -1,0 +1,13 @@
+# Link the MSVC runtime statically on Windows.
+#
+# By default an MSVC target links the CRT dynamically and the resulting exe
+# imports VCRUNTIME140.dll, which only exists if the Visual C++ Redistributable
+# is installed. That turned "download scrapmf.exe and run it" into "download
+# scrapmf.exe, install a ~100 MB runtime, then run it" — see the import check in
+# .github/workflows/ci.yml, which fails the build if this regresses.
+#
+# This keeps the Windows build honest about what it is: the musl Linux targets
+# are static and dependency-free, and this makes the Windows exe match that.
+# Every DLL the finished exe imports is then part of Windows itself.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

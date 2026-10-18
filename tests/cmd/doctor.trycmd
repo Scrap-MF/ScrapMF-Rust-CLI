@@ -1,0 +1,11 @@
+```console
+$ scrapmf doctor --help
+Check backends and system
+
+Usage: scrapmf doctor [OPTIONS]
+
+Options:
+  -v, --verbose...  Increase verbosity (-v, -vv)
+  -h, --help        Print help
+
+```

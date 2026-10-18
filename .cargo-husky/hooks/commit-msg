@@ -1,0 +1,26 @@
+#!/bin/sh
+# Fast Conventional Commits guard at commit time (full-range validation via
+# `convco check` runs later in pre-push when the commits already exist).
+# Merge and revert commits are exempt.
+set -u
+
+msg_file="$1"
+head_line=$(head -1 "$msg_file")
+
+case "$head_line" in
+    Merge*|Revert\ *) exit 0 ;;
+esac
+
+pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?(!)?: .+'
+echo "$head_line" | grep -Eq "$pattern" && exit 0
+
+cat >&2 << EOF
+✖ commit message does not follow Conventional Commits:
+
+    $head_line
+
+  Expected: <type>(<scope>)!: <description>
+  Types:    feat fix docs style refactor perf test build ci chore revert
+  Example:  feat(cli): add --preset flag
+EOF
+exit 1
