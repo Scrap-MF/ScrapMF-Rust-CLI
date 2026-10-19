@@ -197,17 +197,19 @@ pub fn run(
         if let Some(summary) = crate::application::integrity::quality_summary(&paths) {
             crate::output::print_info(&summary);
         }
-        drop(paths);
         report_integrity(checked, &issues);
-        // Termux MediaScan — single dir scan per finished download (best-effort)
+        // Termux MediaScan — one scan per finished download (best-effort),
+        // narrowed to the tree this run wrote. Runs before the ledger is
+        // dropped, since the paths are what makes the narrowing possible.
         if let Some(dir) = effective_output.as_deref() {
-            crate::application::media_scan::maybe_scan(dir);
+            let _ = crate::application::media_scan::maybe_scan(dir, Some(&paths));
         } else if let Some(dir) = crate::config::load()
             .ok()
             .map(|c| crate::config::expand_output_dir(&c.general.output_dir))
         {
-            crate::application::media_scan::maybe_scan(&dir);
+            let _ = crate::application::media_scan::maybe_scan(&dir, Some(&paths));
         }
+        drop(paths);
     }
 
     if !outcome.skipped.is_empty() {

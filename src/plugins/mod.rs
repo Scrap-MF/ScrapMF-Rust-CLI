@@ -159,14 +159,19 @@ pub fn threads_enabled() -> bool {
 
 // ─── Termux MediaScan (lightweight, no venv) ──────────────────────────────────
 
-fn is_termux_env() -> bool {
+/// Whether this process runs inside Termux. Public because the gallery scan
+/// reasons about Android-only storage visibility.
+pub fn is_termux_env() -> bool {
     std::env::var_os("TERMUX_VERSION").is_some()
         || std::env::var_os("PREFIX").is_some_and(|p| p.to_string_lossy().contains("com.termux"))
 }
 
 /// Whether termux-media-scan is usable on this host (Termux + binary present).
+/// The env override counts as present: it is how the binary is located when
+/// it is not on PATH, and the scan itself resolves it the same way.
 pub fn is_termux_available() -> bool {
-    which::which("termux-media-scan").is_ok()
+    std::env::var_os("SCRAPMF_TERMUX_SCAN_BIN").is_some_and(|p| !p.is_empty())
+        || which::which("termux-media-scan").is_ok()
 }
 
 /// Current termux-scan plugin state (no venv, just toggle + binary check).

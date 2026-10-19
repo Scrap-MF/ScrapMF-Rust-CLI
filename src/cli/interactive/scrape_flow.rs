@@ -636,32 +636,36 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                 let log_path = runlog.borrow().path.display().to_string();
                 drop(runlog);
                 let mut rep = lines;
+                // Taken once and reused: the scan needs the same paths, and
+                // locking the job's list twice risks seeing it mid-write.
+                let job_paths = downloaded_by_job[i]
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .clone();
                 // Post-run integrity: only meaningful when the scrape actually
                 // succeeded, and never on a cancelled run — a half-finished
                 // download would report every remaining file as truncated.
                 if result.is_ok() && !was_cancelled {
-                    let paths = downloaded_by_job[i]
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner())
-                        .clone();
+                    let paths = &job_paths;
                     let out_dir = crate::config::expand_output_dir(
                         req.output.as_ref().unwrap_or(&cfg.general.output_dir),
                     );
                     let (checked, issues) =
-                        crate::application::integrity::verify_run(&paths, Some(&out_dir));
-                    if let Some(summary) = crate::application::integrity::quality_summary(&paths) {
+                        crate::application::integrity::verify_run(paths, Some(&out_dir));
+                    if let Some(summary) = crate::application::integrity::quality_summary(paths) {
                         rep.push((false, format!("quality: {summary}")));
                     }
                     for (error, text) in integrity_report_lines(checked, &issues) {
                         rep.push((error, text));
                     }
                 }
-                // Termux MediaScan — single dir scan per finished download (quick/saved/url)
+                // Termux MediaScan — one scan per finished download, narrowed to
+                // the tree this job actually wrote (quick/saved/url)
                 if result.is_ok() {
                     let dir = crate::config::expand_output_dir(
                         req.output.as_ref().unwrap_or(&cfg.general.output_dir),
                     );
-                    crate::application::media_scan::maybe_scan(&dir);
+                    let _ = crate::application::media_scan::maybe_scan(&dir, Some(&job_paths));
                 }
                 if failed && !log_path.is_empty() {
                     rep.push((true, format!("log: {log_path}")));
@@ -704,7 +708,9 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
             let dir = crate::config::expand_output_dir(
                 req.output.as_ref().unwrap_or(&cfg.general.output_dir),
             );
-            crate::application::media_scan::maybe_scan(&dir);
+            // No per-file ledger on this path, so the whole output dir is the
+            // honest answer.
+            let _ = crate::application::media_scan::maybe_scan(&dir, None);
         }
     }
     Step::Value(())

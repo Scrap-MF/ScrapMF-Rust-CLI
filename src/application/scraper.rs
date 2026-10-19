@@ -87,17 +87,10 @@ pub fn validate_output_path(path: &std::path::Path) -> anyhow::Result<()> {
     if path.as_os_str().is_empty() {
         anyhow::bail!("output path is empty");
     }
-    let s = path.to_string_lossy();
-    let expanded = if let Some(stripped) = s.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            home.join(stripped)
-        } else {
-            path.to_path_buf()
-        }
-    } else {
-        path.to_path_buf()
-    };
-    let expanded = Path::new(&expanded);
+    // Expanded through the shared helper, not an inline copy: validating the
+    // raw string would let `$HOME/etc` pass the `/etc` protection below, since
+    // the literal string never starts with a protected root.
+    let expanded = crate::util::expand_tilde(path);
     // Prefix match on components: `/etc` protects `/etc/passwd_backup` too.
     // The bare filesystem root `/` is special-cased: it only rejects the root
     // itself, since every absolute path technically starts with it.
