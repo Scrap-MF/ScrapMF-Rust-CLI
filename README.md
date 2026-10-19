@@ -47,21 +47,10 @@ cargo binstall scrapmf                 # prebuilt binary
 cargo install --path .                 # or build from this repo
 ```
 
-**Windows:**
+**Windows (via WSL):**
 
-Download **`scrapmf.exe`** from the
-[latest release](https://github.com/Scrap-MF/ScrapMF-Rust-CLI/releases/latest) — it
-runs as-is, no extraction step. Put it anywhere in your `PATH`, open a **new**
-terminal, then:
-
-```powershell
-scrapmf --version
-scrapmf setup      # downloads the pinned gallery-dl backend — required
-scrapmf doctor     # confirms both are ready
-```
-
-Use **Windows Terminal** for the menu — legacy conhost renders it poorly.
-`scrapmf-windows-x86_64.zip` holds the same executable if you prefer a folder.
+scrapmf has no native Windows binary. Install it inside WSL using the Linux
+one-liner above; from there the rest of this guide applies unchanged.
 
 <details>
 <summary><strong>Termux (Android)</strong></summary>
@@ -89,7 +78,7 @@ scrapmf --version
 | Linux x86_64 / ARM64 / ARM32 | static musl + dynamic gnu |
 | Linux RISC-V 64 / POWER 64 LE | dynamic gnu |
 | Android (Termux) | static musl |
-| Windows x86_64 | standalone `.exe` |
+| Windows | via WSL (use the Linux build) |
 | macOS | build from source with `cargo install --path .` |
 
 ---
@@ -188,9 +177,33 @@ for next time. `scrapmf` stores cookies at `0600` and never logs them.
 > **Android:** `--cookies-from-browser` cannot work in Termux — browsers keep
 > cookie databases in app-private storage that Termux cannot read without root.
 > That is an Android limit, not a scrapmf limitation. Export `cookies.txt` with
-> a Firefox extension (Cookie-Editor) instead, copy it into
-> `~/.config/scrapmf/cookies/`, and use `--cookies`.
->
+> a Firefox extension instead, copy it into `~/.config/scrapmf/cookies/`, and
+> use `--cookies`.
+
+### Android / Termux cookie workflow
+
+The companion Firefox extension **ElDevoraCucas**
+([Scrap-MF/ElDevoraCucasMF](https://github.com/Scrap-MF/ElDevoraCucasMF))
+exports a Netscape `cookies.txt` for Instagram, TikTok, Twitter/X, VSCO,
+Threads and Facebook straight from a logged-in Firefox session.
+
+1. Install the extension in **Firefox for Android** (Firefox Nightly with
+   `xpinstall.signatures.required` set to `false`, or from AMO once listed).
+2. Log in to the sites you want inside Firefox.
+3. Open the extension popup, tick the networks, and download `cookies.txt`.
+4. Copy the file into Termux's config dir:
+
+   ```bash
+   termux-setup-storage   # once per fresh install
+   cp ~/storage/downloads/cookies.txt ~/.config/scrapmf/cookies/android.txt
+   scrapmf scrape "https://www.instagram.com/sbtn_mf/" \
+     --cookies ~/.config/scrapmf/cookies/android.txt
+   ```
+
+Firefox writes downloads to `~/storage/downloads`, which Termux reaches through
+the symlink that `termux-setup-storage` creates. scrapmf reads the file you hand
+it and does not refresh it — re-export when the session expires.
+
 > Cookie files are account credentials. Never commit or share them.
 
 ---
@@ -231,7 +244,7 @@ availability and system details in one screen.
 | Posts are private / empty | Log in to the site in your browser, then re-capture cookies |
 | `HTTP Error 429` (rate limited) | `scrapmf` waits and retries automatically (60s, then 120s). Slower than that: add a preset with a higher rate limit. |
 | Interrupted download | Just run it again — completed files are kept and skipped |
-| Interactive menu renders wrong | Use Windows Terminal, or a terminal with true colour support |
+| Interactive menu renders wrong | Use a terminal with true colour support |
 
 Config lives in `~/.config/scrapmf/config.toml` (created on first run):
 
