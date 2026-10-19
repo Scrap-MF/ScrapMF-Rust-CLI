@@ -354,6 +354,7 @@ pub fn resolve_session(
     site_cfg: Option<&crate::config::Site>,
 ) -> (Option<PathBuf>, Option<String>) {
     let mut file = cookies_file;
+    let explicit_browser = cookies_browser.is_some();
     let mut browser = cookies_browser.or(global_browser);
     if let Some(site) = site_cfg {
         if file.is_none() {
@@ -383,6 +384,14 @@ pub fn resolve_session(
                 );
             }
         }
+    }
+    // A cookies file is a deliberate, explicit choice. Sending it together with
+    // browser cookies can present two identities in one request, and gallery-dl
+    // applies `--cookies-from-browser` after `--cookies`, so the browser copy
+    // silently wins. Clear the browser source whenever a file is present, unless
+    // the caller explicitly asked for browser cookies too.
+    if file.is_some() && !explicit_browser {
+        browser = None;
     }
     (file, browser)
 }
@@ -2020,9 +2029,31 @@ mod session_precedence_tests {
             Some(std::path::Path::new("/tmp/whatever.txt"))
         );
         assert_eq!(
-            browser.as_deref(),
-            Some("brave-origin"),
-            "the file answers the cookie source; the browser is irrelevant"
+            browser, None,
+            "the file answers the cookie source; the browser must not be sent too"
+        );
+    }
+
+    /// An explicit `--cookies FILE` must not be mixed with a deprecated
+    /// per-site `cookies_from_browser`. gallery-dl applies the browser copy
+    /// after the file, so the browser silently wins and the file is ignored.
+    #[test]
+    fn explicit_cookie_file_clears_deprecated_site_browser() {
+        let site = site_with_browser(Some("brave"));
+        let (file, browser) = resolve_session(
+            None,
+            Some(PathBuf::from("/tmp/explicit.txt")),
+            None,
+            None,
+            Some(&site),
+        );
+        assert_eq!(
+            file.as_deref(),
+            Some(std::path::Path::new("/tmp/explicit.txt"))
+        );
+        assert_eq!(
+            browser, None,
+            "the file must not be mixed with browser cookies"
         );
     }
 
