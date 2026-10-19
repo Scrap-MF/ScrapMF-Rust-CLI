@@ -727,15 +727,7 @@ fn import_from_file_flow(default_name: &str) {
         return;
     };
     let src_path = Path::new(&src);
-    let src_expanded = if let Some(stripped) = src.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            home.join(stripped)
-        } else {
-            src_path.to_path_buf()
-        }
-    } else {
-        src_path.to_path_buf()
-    };
+    let src_expanded = crate::util::expand_tilde(src_path);
     let content = match std::fs::read_to_string(&src_expanded) {
         Ok(c) => c,
         Err(e) => {

@@ -215,10 +215,52 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
             }),
         }
         match crate::plugins::termux_scan_state() {
-            PluginState::Enabled(_) => out.push(CheckLine {
-                level: Level::Success,
-                text: "plugins: termux-scan enabled (termux-media-scan)".to_string(),
-            }),
+            PluginState::Enabled(_) => {
+                out.push(CheckLine {
+                    level: Level::Success,
+                    text: "plugins: termux-scan enabled (termux-media-scan)".to_string(),
+                });
+                // A scan aimed at app-private storage exits 0 and indexes
+                // nothing, so "enabled" alone would read as working.
+                let out_dir = crate::config::load()
+                    .map(|c| crate::config::expand_output_dir(&c.general.output_dir))
+                    .unwrap_or_default();
+                if !out_dir.as_os_str().is_empty() {
+                    match crate::application::media_scan::resolve_target(&out_dir) {
+                        crate::application::media_scan::ScanTarget::PrivateStorage(p) => {
+                            let name = p
+                                .file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| "scrapmf".to_string());
+                            out.push(CheckLine {
+                                level: Level::Warn,
+                                text: format!(
+                                    "termux-scan output dir is app-private storage ({}) — Android Gallery cannot index it; set output_dir to $HOME/storage/downloads/{name}",
+                                    p.display()
+                                ),
+                            });
+                        }
+                        crate::application::media_scan::ScanTarget::Missing(_) => out.push(
+                            CheckLine {
+                                level: Level::Warn,
+                                text: format!(
+                                    "termux-scan output dir does not exist yet: {}",
+                                    out_dir.display()
+                                ),
+                            },
+                        ),
+                        crate::application::media_scan::ScanTarget::Ready(p) => {
+                            out.push(CheckLine {
+                                level: Level::Info,
+                                text: format!(
+                                    "termux-scan target: {} (recursive)",
+                                    p.display()
+                                ),
+                            })
+                        }
+                    }
+                }
+            }
             PluginState::Disabled => out.push(CheckLine {
                 level: Level::Info,
                 text: "plugins: termux-scan disabled — enable in scrapmf → Plugins for Android gallery scan"

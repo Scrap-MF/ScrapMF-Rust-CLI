@@ -159,28 +159,17 @@ fn termux_scan_submenu(def: &PluginDef) {
                         continue;
                     }
                 };
-                println!("→ scanning {}", dir.display());
-                match crate::application::media_scan::maybe_scan(&dir) {
-                    crate::application::media_scan::ScanOutcome::Done => {
-                        println!("✔ scan finished (check Android Gallery)");
-                    }
+                // `maybe_scan` reports the path it scanned and every failure
+                // mode itself; only the toggle needs saying here, since being
+                // disabled is deliberately silent there.
+                match crate::application::media_scan::maybe_scan(&dir, None) {
                     crate::application::media_scan::ScanOutcome::Disabled => {
                         println!("✖ Termux MediaScan is disabled — enable it first");
                     }
-                    crate::application::media_scan::ScanOutcome::MissingBinary => {
-                        println!(
-                            "✖ termux-media-scan not found — install the termux:api app + pkg install termux-api"
-                        );
+                    crate::application::media_scan::ScanOutcome::Done => {
+                        println!("✔ check Android Gallery");
                     }
-                    crate::application::media_scan::ScanOutcome::MissingDir => {
-                        println!("✖ directory does not exist yet: {}", dir.display());
-                    }
-                    crate::application::media_scan::ScanOutcome::NonZero(code) => {
-                        println!("✖ termux-media-scan exited with code {code:?}");
-                    }
-                    crate::application::media_scan::ScanOutcome::Failed(e) => {
-                        println!("✖ termux-media-scan failed: {e}");
-                    }
+                    _ => {}
                 }
                 pause();
             }
