@@ -201,12 +201,12 @@ pub fn run(
         report_integrity(checked, &issues);
         // Termux MediaScan — single dir scan per finished download (best-effort)
         if let Some(dir) = effective_output.as_deref() {
-            crate::application::media_scan::maybe_scan(dir);
+            let _ = crate::application::media_scan::maybe_scan(dir);
         } else if let Some(dir) = crate::config::load()
             .ok()
             .map(|c| crate::config::expand_output_dir(&c.general.output_dir))
         {
-            crate::application::media_scan::maybe_scan(&dir);
+            let _ = crate::application::media_scan::maybe_scan(&dir);
         }
     }
 

@@ -661,7 +661,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                     let dir = crate::config::expand_output_dir(
                         req.output.as_ref().unwrap_or(&cfg.general.output_dir),
                     );
-                    crate::application::media_scan::maybe_scan(&dir);
+                    let _ = crate::application::media_scan::maybe_scan(&dir);
                 }
                 if failed && !log_path.is_empty() {
                     rep.push((true, format!("log: {log_path}")));
@@ -704,7 +704,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
             let dir = crate::config::expand_output_dir(
                 req.output.as_ref().unwrap_or(&cfg.general.output_dir),
             );
-            crate::application::media_scan::maybe_scan(&dir);
+            let _ = crate::application::media_scan::maybe_scan(&dir);
         }
     }
     Step::Value(())

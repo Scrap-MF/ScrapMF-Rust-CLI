@@ -100,7 +100,7 @@ fn termux_scan_submenu(def: &PluginDef) {
         };
         println!("── {} by {} ──", def.title, def.vendor);
         println!("   {status}");
-        println!("   Runs termux-media-scan <scrapmf_dir> once per finished download");
+        println!("   Runs termux-media-scan <output dir> once per finished download");
         println!("   Requires termux:api app + pkg install termux-api (Termux only)");
         println!();
 
@@ -116,7 +116,7 @@ fn termux_scan_submenu(def: &PluginDef) {
             }
             PluginState::Enabled(_) => {
                 options.push("Disable".to_string());
-                options.push("Test scan now (scans ~/scrapmf)".to_string());
+                options.push("Test scan now (uses configured output dir)".to_string());
             }
         }
         options.push("Back".to_string());
@@ -150,13 +150,38 @@ fn termux_scan_submenu(def: &PluginDef) {
                 Err(e) => eprintln!("✖ failed: {e}"),
             },
             c if c.starts_with("Test scan") => {
-                let dir = crate::config::load()
-                    .map(|c| crate::config::expand_output_dir(&c.general.output_dir))
-                    .unwrap_or_else(|_| std::path::PathBuf::from("~/scrapmf"));
-                let expanded = crate::config::expand_output_dir(&dir);
-                println!("→ scanning {}", expanded.display());
-                crate::application::media_scan::maybe_scan(&expanded);
-                println!("✔ scan command sent (check Android Gallery)");
+                // Scan the configured output dir — never a hardcoded fallback.
+                let dir = match crate::config::load() {
+                    Ok(c) => crate::config::expand_output_dir(&c.general.output_dir),
+                    Err(e) => {
+                        eprintln!("✖ cannot read config: {e}");
+                        pause();
+                        continue;
+                    }
+                };
+                println!("→ scanning {}", dir.display());
+                match crate::application::media_scan::maybe_scan(&dir) {
+                    crate::application::media_scan::ScanOutcome::Done => {
+                        println!("✔ scan finished (check Android Gallery)");
+                    }
+                    crate::application::media_scan::ScanOutcome::Disabled => {
+                        println!("✖ Termux MediaScan is disabled — enable it first");
+                    }
+                    crate::application::media_scan::ScanOutcome::MissingBinary => {
+                        println!(
+                            "✖ termux-media-scan not found — install the termux:api app + pkg install termux-api"
+                        );
+                    }
+                    crate::application::media_scan::ScanOutcome::MissingDir => {
+                        println!("✖ directory does not exist yet: {}", dir.display());
+                    }
+                    crate::application::media_scan::ScanOutcome::NonZero(code) => {
+                        println!("✖ termux-media-scan exited with code {code:?}");
+                    }
+                    crate::application::media_scan::ScanOutcome::Failed(e) => {
+                        println!("✖ termux-media-scan failed: {e}");
+                    }
+                }
                 pause();
             }
             c if c.starts_with("Help") => {
