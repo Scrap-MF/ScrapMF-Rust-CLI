@@ -223,13 +223,14 @@ fn verify_system_install() {
 fn print_python_fallback() {
     let pin = backend::GALLERY_DL_PIN;
     if backend::is_dev_pin() {
-        output::print_note(
-            "no pip/pipx found — install Python and git, then the dev backend:",
-        );
+        output::print_note("no pip/pipx found — install Python and git, then the dev backend:");
         println!("  # Termux:");
         println!("  pkg install python git");
         println!("  # other:");
-        println!("  python3 -m pip install git+https://codeberg.org/mikf/gallery-dl.git@{}", backend::GALLERY_DL_GIT_REF);
+        println!(
+            "  python3 -m pip install git+https://codeberg.org/mikf/gallery-dl.git@{}",
+            backend::GALLERY_DL_GIT_REF
+        );
         return;
     }
     if is_termux() {
