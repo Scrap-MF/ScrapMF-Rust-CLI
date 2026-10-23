@@ -15,7 +15,17 @@ use std::path::{Path, PathBuf};
 ///    https://codeberg.org/mikf/gallery-dl/releases/tag/v{PIN}
 /// 2. Update this constant, run the full test suite.
 /// 3. Cut a new scrapmf release — users get the new pin via `scrapmf setup`.
-pub const GALLERY_DL_PIN: &str = "1.32.17";
+pub const GALLERY_DL_PIN: &str = "1.33.0-dev";
+
+/// Git ref (commit) of the dev build of gallery-dl that ships the Instagram
+/// reels/stories fix. Only used when [`GALLERY_DL_PIN`] is a dev version.
+pub const GALLERY_DL_GIT_REF: &str = "b2df7f9444f4dbfda84cc7282eae96db99ef441d";
+
+/// Whether the pinned version is a development build (no official release
+/// assets on Codeberg).
+pub fn is_dev_pin() -> bool {
+    GALLERY_DL_PIN.contains("dev") || GALLERY_DL_PIN.contains("rc")
+}
 
 /// Legacy constant kept for callers that reference the Linux asset directly.
 pub const GALLERY_DL_ASSET: &str = "gallery-dl.bin";
@@ -121,7 +131,13 @@ pub fn resolve(config_override: Option<PathBuf>) -> Source {
     let env = std::env::var_os("SCRAPMF_GALLERY_DL")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from);
-    let managed = managed_installed();
+    // Dev pins have no managed binary; skip the managed dir so the pipx/pip
+    // install on $PATH is picked up instead.
+    let managed = if is_dev_pin() {
+        None
+    } else {
+        managed_installed()
+    };
     let system = which::which("gallery-dl").ok();
 
     let sources = Sources {
@@ -168,6 +184,11 @@ pub fn pin_drift_notice() -> Option<String> {
 /// The comparison behind [`pin_drift_notice`], split out so it can be tested
 /// without spawning a process.
 fn drift_notice(installed: &str, pinned: &str) -> Option<String> {
+    if pinned.contains("dev") || pinned.contains("rc") {
+        // Dev pins have no official build to compare against; skip the
+        // version drift check to avoid false positives.
+        return None;
+    }
     if installed == pinned {
         return None;
     }

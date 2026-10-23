@@ -99,7 +99,7 @@ scrapmf doctor
 shows something like:
 
 ```
-gallery-dl 1.32.17 found [bundled (pinned)] pinned v1.32.17
+gallery-dl 1.33.0-dev found [bundled (pinned)] pinned v1.33.0-dev
 ```
 
 The bundled copy never updates on its own — new pins arrive with `scrapmf`
@@ -187,8 +187,10 @@ The companion Firefox extension **ElDevoraCucas**
 exports a Netscape `cookies.txt` for Instagram, TikTok, Twitter/X, VSCO,
 Threads and Facebook straight from a logged-in Firefox session.
 
-1. Install the extension in **Firefox for Android** (Firefox Nightly with
-   `xpinstall.signatures.required` set to `false`, or from AMO once listed).
+1. Install the extension in **Firefox for Android**. The simplest route is
+   Firefox Nightly with `xpinstall.signatures.required` set to `false`: copy
+   `ElDevoraCucasMF.xpi` to the phone (USB, cloud, email), open it in Firefox,
+   and accept the warnings. AMO listing is coming and will not need this step.
 2. Log in to the sites you want inside Firefox.
 3. Open the extension popup, tick the networks, and download `cookies.txt`.
 4. Copy the file into Termux's config dir:
@@ -245,6 +247,7 @@ availability and system details in one screen.
 | `HTTP Error 429` (rate limited) | `scrapmf` waits and retries automatically (60s, then 120s). Slower than that: add a preset with a higher rate limit. |
 | Interrupted download | Just run it again — completed files are kept and skipped |
 | Interactive menu renders wrong | Use a terminal with true colour support |
+| Instagram reels/stories fail (`NotFoundError`) | Refresh cookies (Configuration → Cookie profiles → Refresh); posts work but reels/stories need a fresher session. Try `https://www.instagram.com/id:<ds_user_id>/reels/` or export fresh cookies with ElDevoraCucas. If it persists, gallery-dl 1.32.17 has an upstream bug fixed only in dev: install dev gallery-dl and set `SCRAPMF_GALLERY_DL` or `backend.gallery_dl_path` (see docs). |
 
 Config lives in `~/.config/scrapmf/config.toml` (created on first run):
 

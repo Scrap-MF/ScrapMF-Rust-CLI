@@ -60,10 +60,14 @@ pub fn run(yes: bool) -> Result<()> {
         }
     ));
 
+    // Dev pins have no official standalone build → always install from source.
     // x86_64 has an official standalone build → direct managed install.
     // Every other desktop arch has none (Termux/ARM handled below); Windows
     // x86_64 DOES have one (gallery-dl.exe).
-    if std::env::consts::ARCH == "x86_64" || cfg!(windows) {
+    if backend::is_dev_pin() {
+        install_via_python(yes);
+        Ok(())
+    } else if std::env::consts::ARCH == "x86_64" || cfg!(windows) {
         install_managed(yes)
     } else {
         install_via_python(yes);
@@ -117,8 +121,20 @@ fn install_via_python(yes: bool) {
         return;
     }
 
+    let (spec, label) = if backend::is_dev_pin() {
+        (
+            format!(
+                "gallery-dl @ git+https://codeberg.org/mikf/gallery-dl.git@{}",
+                backend::GALLERY_DL_GIT_REF
+            ),
+            "dev",
+        )
+    } else {
+        (format!("gallery-dl=={pin}"), "pinned")
+    };
+
     output::print_info(&format!(
-        "no standalone build for {} — installing pinned gallery-dl via Python instead",
+        "installing {label} gallery-dl v{pin} via Python ({} )",
         std::env::consts::ARCH
     ));
     let choice = &candidates[0];
@@ -129,7 +145,7 @@ fn install_via_python(yes: bool) {
         }
         cmd.push_str(part);
     }
-    cmd.push_str(&format!(" install gallery-dl=={pin}"));
+    cmd.push_str(&format!(" install {spec}"));
     println!("→ {cmd}");
 
     if !yes && !confirm("Run this now?") {
@@ -144,7 +160,7 @@ fn install_via_python(yes: bool) {
         .collect();
     argv.extend([
         std::ffi::OsString::from("install"),
-        std::ffi::OsString::from(format!("gallery-dl=={pin}")),
+        std::ffi::OsString::from(spec),
     ]);
     match crate::process::Executor::run_capturing(bin, &argv) {
         Ok(out) if out.status.success() => {}
@@ -206,6 +222,17 @@ fn verify_system_install() {
 
 fn print_python_fallback() {
     let pin = backend::GALLERY_DL_PIN;
+    if backend::is_dev_pin() {
+        output::print_note("no pip/pipx found — install Python and git, then the dev backend:");
+        println!("  # Termux:");
+        println!("  pkg install python git");
+        println!("  # other:");
+        println!(
+            "  python3 -m pip install git+https://codeberg.org/mikf/gallery-dl.git@{}",
+            backend::GALLERY_DL_GIT_REF
+        );
+        return;
+    }
     if is_termux() {
         output::print_note(
             "no pip/pipx found — on Termux install Python first, then the pinned backend:",
