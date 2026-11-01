@@ -229,5 +229,17 @@
   "setup_run_command": "→ {cmd}",
   "setup_venv_no_binary": "venv creado pero no se encontró el binario de gallery-dl",
   "setup_ytdlp_already_installed": "yt-dlp incluido ya instalado en {path}",
-  "setup_ytdlp_ready": "yt-dlp incluido listo en {path}"
+  "setup_ytdlp_ready": "yt-dlp incluido listo en {path}",
+  "no_sites_configured": "no hay sitios configurados — agrega uno en Configuración primero",
+  "tasks_dir_not_found": "no se pudo ubicar el directorio de tareas",
+  "task_already_exists": "la tarea '{name}' ya existe",
+  "termux_media_scan_not_found": "no se encontró termux-media-scan — instala la app termux:api y pkg install termux-api",
+  "plugins_creating_venv": "→ Creando entorno Python en {path}",
+  "plugins_installing_threads": "instalando threadstractormf {pin} (compila/descarga dependencias)",
+  "plugins_downloading_chromium": "descargando Chromium para Playwright (~150MB, se cachea entre ejecuciones)",
+  "plugins_chromium_download_failed": "falló la descarga de Chromium ({e}). El plugin sigue funcionando para fetches solo GraphQL; reintenta con: {pw} install chromium (las libs del sistema pueden requerir '{pw} install-deps chromium' con sudo)",
+  "plugins_verifying_chromium": "verificando lanzamiento headless de Chromium",
+  "plugins_threads_enabled": "plugin de threads habilitado (threadstractormf {pin})",
+  "could_not_resolve_id": "no se pudo resolver el ID a nombre de usuario: {e} — verifica el ID y que tu sesión de {site} siga válida",
+  "error_stays_visible": "nota: el error permanece visible hasta que presiones Enter"
 }

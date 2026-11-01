@@ -251,35 +251,36 @@ pub fn install() -> anyhow::Result<()> {
     let venv =
         threads_venv().ok_or_else(|| anyhow::anyhow!("cannot determine scrapmf data dir"))?;
     std::fs::create_dir_all(&venv)?;
-    output::print_info(&format!("creating virtualenv at {}", venv.display()));
+    output::print_info(&crate::i18n::tf(
+        "plugins_creating_venv",
+        &[("path", &venv.display().to_string())],
+    ));
     crate::process::Executor::run_inherited_checked(
         "python3",
         &["-m".into(), "venv".into(), venv.as_os_str().to_owned()],
     )?;
 
     let pip = venv_pip(&venv);
-    output::print_info(&format!(
-        "installing threadstractormf {THREADSTRACTOR_PIN} (this compiles/downloads deps)"
+    output::print_info(&crate::i18n::tf(
+        "plugins_installing_threads",
+        &[("pin", THREADSTRACTOR_PIN)],
     ));
     crate::process::Executor::run_inherited_checked(&pip.0, &pip.1)?;
 
     // Chromium for the Playwright DOM fallback. Shared user-level cache:
     // re-runs are cheap when it already exists.
-    output::print_info("downloading Chromium for Playwright (~150MB, cached across runs)");
+    output::print_info(&crate::i18n::t("plugins_downloading_chromium"));
     let pw_install = playwright_cli(&venv);
     if let Err(e) = crate::process::Executor::run_inherited_checked(&pw_install.0, &pw_install.1) {
-        output::print_help(&format!(
-            "Chromium download failed ({e}). The plugin still works for GraphQL-only \
-             fetches; retry later with: {pw} install chromium (system libs may need \
-             '{pw_alt} install-deps chromium' with sudo)",
-            pw = pw_install.0,
-            pw_alt = pw_install.0,
+        output::print_help(&crate::i18n::tf(
+            "plugins_chromium_download_failed",
+            &[("e", &e.to_string()), ("pw", pw_install.0.as_str())],
         ));
     }
 
     // Smoke test: headless launch proves browser + system libs are usable.
     let py = venv_python(&venv);
-    output::print_info("verifying headless Chromium launch");
+    output::print_info(&crate::i18n::t("plugins_verifying_chromium"));
     crate::process::Executor::run_inherited_checked(&py.0, &py.1)?;
 
     // Version marker.
@@ -309,8 +310,9 @@ pub fn install() -> anyhow::Result<()> {
 
     // Site template lives only while the plugin exists.
     crate::config::ensure_threads_site()?;
-    output::print_success(&format!(
-        "threads plugin enabled (threadstractormf {THREADSTRACTOR_PIN})"
+    output::print_success(&crate::i18n::tf(
+        "plugins_threads_enabled",
+        &[("pin", THREADSTRACTOR_PIN)],
     ));
     Ok(())
 }

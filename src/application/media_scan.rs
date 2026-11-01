@@ -175,9 +175,7 @@ pub fn maybe_scan(dir: &Path, downloaded: Option<&[String]>) -> ScanOutcome {
         .map(std::path::PathBuf::from)
         .or_else(|| which::which("termux-media-scan").ok());
     let Some(bin) = bin else {
-        crate::output::print_warn(
-            "termux-media-scan not found — install the termux:api app + pkg install termux-api",
-        );
+        crate::output::print_warn(&crate::i18n::t("termux_media_scan_not_found"));
         tracing::warn!(
             "termux-scan enabled but termux-media-scan not found — install termux:api app + pkg install termux-api"
         );

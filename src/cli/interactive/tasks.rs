@@ -237,11 +237,11 @@ fn create_task(existing: Option<Task>) -> Created {
     let Some(site_opts) =
         Some(crate::cli::interactive::scrape_flow::site_options_with_fallbacks(&[]))
     else {
-        crate::output::print_error("no sites configured — add one under Configuration first");
+        crate::output::print_error(&crate::i18n::t("no_sites_configured"));
         return Created::Cancelled;
     };
     if site_opts.is_empty() {
-        crate::output::print_error("no sites configured — add one under Configuration first");
+        crate::output::print_error(&crate::i18n::t("no_sites_configured"));
         return Created::Cancelled;
     }
 
@@ -445,12 +445,12 @@ fn finish(
         return Created::Cancelled;
     }
     let Some(dir) = config::tasks_dir() else {
-        crate::output::print_error("could not locate the tasks directory");
+        crate::output::print_error(&crate::i18n::t("tasks_dir_not_found"));
         return Created::Cancelled;
     };
     let path = dir.join(format!("{name}.toml"));
     if !editing && path.exists() {
-        crate::output::print_error(&format!("task '{name}' already exists"));
+        crate::output::print_error(&crate::i18n::tf("task_already_exists", &[("name", name)]));
         return Created::Cancelled;
     }
     let task = Task {

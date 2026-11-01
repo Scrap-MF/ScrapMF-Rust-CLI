@@ -1468,12 +1468,11 @@ pub(super) fn prompt_quick_scrape() {
                         }
                         Err(e) => {
                             let site_label = if site_name == "facebook" { "FB" } else { "IG" };
-                            crate::output::print_error(&format!(
-                                "could not resolve ID to username: {e} — check the ID and that your {site_label} session is still valid"
+                            crate::output::print_error(&crate::i18n::tf(
+                                "could_not_resolve_id",
+                                &[("e", &e.to_string()), ("site", site_label)],
                             ));
-                            crate::output::print_help(
-                                "note: the error stays visible until you press Enter",
-                            );
+                            crate::output::print_help(&crate::i18n::t("error_stays_visible"));
                             let _ = Text::new(&crate::i18n::t("press_enter_to_go_back"))
                                 .with_render_config(super::theme::render_config())
                                 .prompt();
