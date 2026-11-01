@@ -3,6 +3,10 @@ use url::Url;
 use crate::error::ScrapmfError;
 use crate::providers::Provider;
 
+fn is_edge_block(msg: &str) -> bool {
+    msg.contains("403 Forbidden") || msg.contains("HttpError: '403")
+}
+
 /// Validate URL: trim, length ≤2048, Url::parse, allow only http/https.
 pub fn validate_url(raw: &str) -> Result<Url, ScrapmfError> {
     let s = raw.trim();
@@ -217,6 +221,16 @@ pub fn is_challenge_exhausted_line(line: &str) -> bool {
         }
     }
     false
+}
+/// True for gallery-dl cookie-extraction noise that adds no value to the
+/// user: secretstorage missing, individual AES-CBC decrypt failures, and
+/// the extraction summary. These are expected and harmless.
+pub fn is_cookie_noise(line: &str) -> bool {
+    let l = line.to_lowercase();
+    l.contains("secretstorage")
+        || l.contains("failed to decrypt cookie")
+        || (l.contains("extracted") && l.contains("cookies from"))
+        || (l.contains("could not be decrypted"))
 }
 
 /// Optional UI hooks so the presentation layer (indicatif/log panel) can
@@ -868,117 +882,67 @@ fn apply_sub_url_overrides(req: &mut ScrapeRequest, url: &str) {
     }
 }
 
-/// Turn a `cookies_from_browser` request into an explicit Netscape profile so
-/// gallery-dl authenticates with the session this run actually intended.
+/// Rewrite a `cookies_from_browser` request into the exact spec gallery-dl
+/// accepts, pointing at the profile scrapmf resolved.
 ///
-/// gallery-dl resolves the browser name to a profile directory itself, and its
-/// Brave mapping is a fallback *tuple*:
+/// Two failures used to meet here and both ended as an anonymous request:
 ///
-/// ```python
-/// "brave": (join(config, "BraveSoftware/Brave-Browser"),
-///           join(config, "BraveSoftware/Brave-Origin"))
-/// ```
+/// * gallery-dl knows browser *families*, not channels. Every Brave build is
+///   `brave` to it, so `brave-origin` was discarded with
+///   `Unsupported browser 'brave-origin'` and the run continued without
+///   cookies.
+/// * gallery-dl resolves a profile root itself and picks the newest database.
+///   scrapmf preferred `Default`, so the two processes could read different
+///   sessions even though both said "Brave Origin".
 ///
-/// It uses `Brave-Browser` whenever that directory exists and only falls back
-/// to `Brave-Origin` otherwise. When both are installed, a logged-out or
-/// server-side-revoked session in the first shadows a healthy one in the
-/// second, and Instagram answers `HTTP redirect to home page` while scrapmf's
-/// own cookie count looks correct — the two processes read different profiles.
-/// Capturing through scrapmf removes that ordering dependency.
+/// Resolving the profile here and handing gallery-dl its directory removes
+/// both ambiguities: gallery-dl checks `<dir>/Cookies` first, so it reads
+/// exactly the database scrapmf selected. No cookies are captured, filtered or
+/// written — gallery-dl loads the browser session directly and filters per
+/// request, which works for every extractor rather than one site.
 ///
-/// Any failure here (locked OS keyring, undecryptable database, unresolvable
-/// site) leaves the request untouched, so `--cookies-from-browser` still runs
-/// exactly as before. This can only narrow the session, never widen the blast
-/// radius of a failure.
-fn resolve_cookie_capture(req: &mut ScrapeRequest) {
+/// A `browser:profile` request keeps the user's profile untouched; only the
+/// family name is translated. An unknown browser is left as-is: validation
+/// already rejected it, and rewriting it would only hide the mistake.
+fn resolve_cookie_browser(req: &mut ScrapeRequest) {
     if req.cookies_file.is_some() {
         return;
     }
     let Some(browser) = req.cookies_from_browser.clone() else {
         return;
     };
-    // A profile suffix (`brave:Profile 2`) only means something to the browser;
-    // scrapmf's capture reads the default profile, so leave those alone rather
-    // than silently scraping the wrong one.
-    if browser.contains(':') {
-        return;
-    }
-    let Some(site) = crate::sites::registry::find_by_url(&req.url) else {
+    let Some(spec) = gallery_dl_cookie_spec(&browser) else {
         return;
     };
-    let sites = vec![site.id.to_string()];
-    let profile = format!("{}{browser}", crate::config::cookies::AUTO_PROFILE_PREFIX);
-    // Reuse the cache when it already covers this site. Re-reading the
-    // browser hits the OS keyring over D-Bus for every sub-extractor, and the
-    // session does not change mid-run, so the extra reads bought nothing. A
-    // cache that lacks this site is recaptured rather than used blind.
-    let cached = crate::config::cookies::profile_path(&profile)
-        .filter(|p| p.is_file())
-        .filter(|_| {
-            crate::config::cookies::load_profile(&profile)
-                .map(|cs| {
-                    cs.iter()
-                        .any(|c| sites.iter().any(|s| c.domain.contains(s.as_str())))
-                })
-                .unwrap_or(false)
-        });
-    // A capture that still covers the site can still be out of date. Browsers
-    // rotate the session cookie on their own — Instagram refreshed one within
-    // the minute while this check was being written — and the site then refuses
-    // the stale value immediately, which looks exactly like a missing account.
-    //
-    // Comparing against the browser's own cookie database is exact, where a
-    // fixed age threshold would only guess: if the database has been written
-    // since the capture was taken, the capture predates it and is stale.
-    let stale = cached
-        .as_ref()
-        .is_some_and(|p| crate::config::cookies::capture_predates_browser(p, &browser));
-    if let Some(path) = cached.filter(|_| !stale) {
-        tracing::debug!("reusing captured cookie profile {}", path.display());
-        req.cookies_file = Some(path);
-        req.cookies_from_browser = None;
-        return;
+    if spec != browser {
+        tracing::debug!(from = %browser, to = %spec, "gallery-dl cookie browser spec");
     }
-    if stale {
-        tracing::info!(
-            "{browser}: captured session is older than the browser's cookie database — \
-             re-capturing"
-        );
-    }
-    let captured = if browser.eq_ignore_ascii_case("firefox") {
-        crate::config::cookies::capture_firefox(&sites, &profile)
-    } else {
-        crate::config::cookies::capture_chromium(&browser, &sites, &profile)
+    req.cookies_from_browser = Some(spec);
+}
+
+/// Translate `browser[:profile]` into `family[:profile-or-resolved-dir]`.
+fn gallery_dl_cookie_spec(browser: &str) -> Option<String> {
+    let (label, profile) = match browser.split_once(':') {
+        Some((label, profile)) => (label, Some(profile)),
+        None => (browser, None),
     };
-    match captured {
-        Ok((path, count)) => {
-            tracing::debug!(
-                "captured {count} cookie(s) from {browser} into {}",
-                path.display()
-            );
-            req.cookies_file = Some(path);
-            req.cookies_from_browser = None;
-        }
-        Err(e) => {
-            tracing::debug!(
-                "cookie capture from {browser} unavailable ({e}); \
-                 keeping --cookies-from-browser"
-            );
-            // A locked keyring must not cost the user their download. If a stale
-            // capture exists, use it: a session from yesterday usually still
-            // beats no session at all, and the site decides whether it works.
-            if let Some(path) =
-                crate::config::cookies::profile_path(&profile).filter(|p| p.is_file())
-            {
-                tracing::warn!(
-                    "{browser}: could not refresh the captured session ({e}); \
-                     falling back to the stored copy"
-                );
-                req.cookies_file = Some(path);
-                req.cookies_from_browser = None;
-            }
-        }
+    let ch = crate::browsers::resolve_channel(label)?;
+    let name = crate::browsers::gallery_dl_browser_name(ch)?;
+    if let Some(profile) = profile {
+        return Some(format!("{name}:{profile}"));
     }
+    let db = crate::browsers::find_cookie_db(ch, crate::browsers::cookie_db_filename(ch));
+    // The database's parent is the profile directory (or the channel root for
+    // Opera, which keeps its database at the root). gallery-dl accepts either:
+    // it looks for the database directly under the path it is given.
+    Some(
+        match db.and_then(|db| db.path.parent().map(|p| p.display().to_string())) {
+            Some(dir) => format!("{name}:{dir}"),
+            // Nothing found on disk: let gallery-dl use its own roots. The family
+            // name alone still beats a channel id it rejects.
+            None => name.to_string(),
+        },
+    )
 }
 
 pub fn is_threads_url(url: &str) -> bool {
@@ -991,6 +955,17 @@ fn run_one_sub_scrape(
     dry_run: bool,
     hooks: Option<&mut ScrapeHooks>,
     abort: &std::sync::atomic::AtomicBool,
+) -> anyhow::Result<usize> {
+    run_one_sub_scrape_impl(req, url, dry_run, hooks, abort, None)
+}
+
+fn run_one_sub_scrape_impl(
+    req: &ScrapeRequest,
+    url: &str,
+    dry_run: bool,
+    mut hooks: Option<&mut ScrapeHooks>,
+    abort: &std::sync::atomic::AtomicBool,
+    backend_override: Option<std::path::PathBuf>,
 ) -> anyhow::Result<usize> {
     // Pick provider like gallery-dl: threads URLs go to the threads plugin
     let is_threads = is_threads_url(url);
@@ -1013,13 +988,17 @@ fn run_one_sub_scrape(
         (bin, a)
     } else {
         let p = crate::providers::gallery_dl::GalleryDl;
-        let bin = crate::providers::gallery_dl::GalleryDl::binary()?
-            .to_string_lossy()
-            .into_owned();
+        let bin = if let Some(ref ov) = backend_override {
+            ov.to_string_lossy().into_owned()
+        } else {
+            crate::providers::gallery_dl::GalleryDl::binary()?
+                .to_string_lossy()
+                .into_owned()
+        };
         let mut sub_req = req.clone();
         sub_req.url = url.to_string();
         apply_sub_url_overrides(&mut sub_req, url);
-        resolve_cookie_capture(&mut sub_req);
+        resolve_cookie_browser(&mut sub_req);
         let a = p.build_args(&sub_req)?;
         (bin, a)
     };
@@ -1030,34 +1009,106 @@ fn run_one_sub_scrape(
     }
 
     // Count posts lost to anti-bot JS challenges (rehydration exhausted).
-    let challenge_failures = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    match hooks {
-        Some(hooks) => {
-            let on_file = &mut hooks.on_file;
-            let on_log = &mut hooks.on_log;
-            let counter = challenge_failures.clone();
-            crate::process::Executor::run_streaming(
-                &binary,
-                &args,
-                abort,
-                // one stdout line per downloaded/skipped file (the path)
-                &mut |line| on_file(line),
-                &mut |line| {
-                    tracing::debug!(target = "gallery-dl", "{line}");
-                    if is_challenge_exhausted_line(line) {
-                        counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    }
-                    on_log(line);
-                },
-            )?;
+    if dry_run {
+        args.push(std::ffi::OsString::from("--get-urls"));
+        let first = crate::process::Executor::run_inherited_checked(&binary, &args);
+        if first.is_ok() {
+            return Ok(0);
         }
-        None => {
-            // No UI attached — inherit stdio (raw output, CI-friendly).
-            // stderr lines are not captured here, so challenge counting is
-            // unavailable in this mode.
-            crate::process::Executor::run_inherited_checked(&binary, &args)?;
+        if !is_threads
+            && backend_override.is_none()
+            && let Err(e) = &first
+        {
+            let msg = e.to_string();
+            if is_edge_block(&msg)
+                && let Ok(bin_path) = crate::providers::gallery_dl::GalleryDl::binary()
+                && let Some(fb) = crate::application::backend::fallback_for(&bin_path)
+            {
+                if let Some(hooks) = hooks {
+                    let hf = &mut hooks.on_log;
+                    hf(
+                        "[scrapmf] bundled gallery-dl blocked by Cloudflare (403); retrying with system gallery-dl",
+                    );
+                }
+                tracing::warn!(
+                    "bundled gallery-dl blocked by Cloudflare; retrying with system gallery-dl"
+                );
+                let p = crate::providers::gallery_dl::GalleryDl;
+                let mut sub_req = req.clone();
+                sub_req.url = url.to_string();
+                apply_sub_url_overrides(&mut sub_req, url);
+                resolve_cookie_browser(&mut sub_req);
+                let mut args2 = p.build_args(&sub_req)?;
+                args2.push(std::ffi::OsString::from("--get-urls"));
+                crate::process::Executor::run_inherited_checked(&fb.to_string_lossy(), &args2)?;
+                return Ok(0);
+            }
+        }
+        first?;
+        return Ok(0);
+    }
+
+    // Count posts lost to anti-bot JS challenges (rehydration exhausted).
+    let challenge_failures = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let mut run_res: anyhow::Result<()> = Err(anyhow::anyhow!("uninitialized"));
+    let mut did_run = false;
+    if let Some(hooks) = hooks.as_deref_mut() {
+        let on_file = &mut hooks.on_file;
+        let on_log = &mut hooks.on_log;
+        let counter = challenge_failures.clone();
+        run_res = crate::process::Executor::run_streaming(
+            &binary,
+            &args,
+            abort,
+            &mut |line| on_file(line),
+            &mut |line| {
+                tracing::debug!(target = "gallery-dl", "{line}");
+                if is_challenge_exhausted_line(line) {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+                if !is_cookie_noise(line) {
+                    on_log(line);
+                }
+            },
+        )
+        .map(|_| ())
+        .map_err(|e| anyhow::anyhow!(e));
+        did_run = true;
+    }
+    if !did_run {
+        run_res = crate::process::Executor::run_inherited_checked(&binary, &args)
+            .map(|_| ())
+            .map_err(|e| anyhow::anyhow!(e));
+    }
+
+    if run_res.is_ok() {
+        return Ok(challenge_failures.load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    // Fallback to system gallery-dl on Cloudflare edge block when using bundled
+    if !is_threads
+        && backend_override.is_none()
+        && let Err(e) = &run_res
+    {
+        let msg = e.to_string();
+        if is_edge_block(&msg)
+            && let Ok(bin_path) = crate::providers::gallery_dl::GalleryDl::binary()
+            && let Some(fb) = crate::application::backend::fallback_for(&bin_path)
+        {
+            if let Some(hooks) = hooks.as_deref_mut() {
+                let hf = &mut hooks.on_log;
+                hf(
+                    "[scrapmf] bundled gallery-dl blocked by Cloudflare (403); retrying with system gallery-dl",
+                );
+            }
+            tracing::warn!(
+                "bundled gallery-dl blocked by Cloudflare; retrying with system gallery-dl"
+            );
+            return run_one_sub_scrape_impl(req, url, dry_run, hooks, abort, Some(fb));
         }
     }
+
+    run_res?;
     Ok(challenge_failures.load(std::sync::atomic::Ordering::Relaxed))
 }
 
@@ -1518,72 +1569,106 @@ profile, or this profile has no videos posted";
     /// A request that already carries an explicit cookie file must not be
     /// rewritten: the file is the more specific instruction.
     #[test]
-    fn capture_never_overrides_an_explicit_cookie_file() {
+    fn browser_resolution_never_overrides_an_explicit_cookie_file() {
         let mut req = base_req();
         req.cookies_file = Some(std::path::PathBuf::from("/tmp/explicit.txt"));
         req.cookies_from_browser = Some("brave".to_string());
-        super::resolve_cookie_capture(&mut req);
+        super::resolve_cookie_browser(&mut req);
         assert_eq!(
             req.cookies_file.as_deref(),
             Some(std::path::Path::new("/tmp/explicit.txt")),
-            "an explicit cookie file must win over any browser capture"
+            "an explicit cookie file must win over any browser spec"
         );
     }
 
-    /// The regression this exists for: capture is wired in where argv is built,
-    /// which is the single point both the interactive flow and `scrapmf scrape`
-    /// pass through. A wrong site must leave the browser flag intact so the
-    /// original behaviour survives.
+    /// The regression that produced the VSCO 403: `brave-origin` is a scrapmf
+    /// channel, not a gallery-dl browser. gallery-dl rejected it with
+    /// `Unsupported browser` and continued without cookies.
     #[test]
-    fn capture_leaves_browser_flag_when_the_site_is_unknown() {
-        let mut req = base_req();
-        req.url = "https://example.invalid/some/path".to_string();
-        req.cookies_from_browser = Some("brave".to_string());
-        super::resolve_cookie_capture(&mut req);
-        assert_eq!(
-            req.cookies_from_browser.as_deref(),
-            Some("brave"),
-            "an unresolvable site must keep --cookies-from-browser"
-        );
-        assert!(
-            req.cookies_file.is_none(),
-            "no site means no capture; a file must not appear out of nowhere"
-        );
+    fn brave_channels_are_translated_to_the_family_gallery_dl_accepts() {
+        for channel in [
+            "brave",
+            "brave-origin",
+            "brave-beta",
+            "brave-nightly",
+            "brave-origin-beta",
+            "brave-origin-nightly",
+        ] {
+            let spec = super::gallery_dl_cookie_spec(channel).expect("known channel");
+            assert_eq!(
+                spec.split(':').next(),
+                Some("brave"),
+                "{channel} must reach gallery-dl as 'brave', got {spec:?}"
+            );
+        }
     }
 
-    /// A `browser:profile` suffix is meaningful only to the browser's own reader.
-    /// scrapmf captures the default profile, so honouring the suffix here would
-    /// silently authenticate as the wrong profile — leave those requests alone.
+    /// A profile-qualified request keeps the user's profile; only the family
+    /// name is translated.
     #[test]
-    fn capture_skips_requests_naming_an_explicit_browser_profile() {
+    fn browser_resolution_keeps_an_explicit_profile_suffix() {
         let mut req = base_req();
         req.url = "https://www.instagram.com/user/".to_string();
-        req.cookies_from_browser = Some("brave:Profile 2".to_string());
-        super::resolve_cookie_capture(&mut req);
+        req.cookies_from_browser = Some("brave-origin:Profile 2".to_string());
+        super::resolve_cookie_browser(&mut req);
         assert_eq!(
             req.cookies_from_browser.as_deref(),
             Some("brave:Profile 2"),
-            "a profile-qualified browser must not be captured from the default profile"
+            "the profile must survive the family translation"
         );
         assert!(req.cookies_file.is_none());
     }
 
-    /// Whatever the capture decides, argv must still carry a session — either the
-    /// captured file or the browser flag. This is the invariant that keeps the
-    /// change strictly an improvement.
+    /// Firefox and the Chromium family keep their own names.
     #[test]
-    fn capture_never_leaves_the_request_without_a_session() {
+    fn browser_families_keep_their_gallery_dl_name() {
+        for (channel, expected) in [
+            ("firefox", "firefox"),
+            ("chrome", "chrome"),
+            ("chromium", "chromium"),
+            ("edge", "edge"),
+            ("vivaldi", "vivaldi"),
+            ("opera", "opera"),
+        ] {
+            let spec = super::gallery_dl_cookie_spec(channel).expect("known channel");
+            assert_eq!(spec.split(':').next(), Some(expected), "{channel}: {spec}");
+        }
+    }
+
+    /// The URL is irrelevant now: every gallery-dl run gets the same exact
+    /// browser spec, so VSCO and any other extractor reuse the session instead
+    /// of only the site whose domains happened to be captured.
+    #[test]
+    fn browser_resolution_does_not_depend_on_the_site() {
+        let mut req = base_req();
+        req.url = "https://vsco.co/someone".to_string();
+        req.cookies_from_browser = Some("brave-origin".to_string());
+        super::resolve_cookie_browser(&mut req);
+        let spec = req
+            .cookies_from_browser
+            .as_deref()
+            .expect("the session must survive");
+        assert_eq!(spec.split(':').next(), Some("brave"));
+        assert!(
+            req.cookies_file.is_none(),
+            "no site-filtered capture may be produced"
+        );
+    }
+
+    /// Whatever the resolution decides, argv must still carry a session — and
+    /// an unknown browser must be left untouched rather than silently dropped.
+    #[test]
+    fn browser_resolution_never_leaves_the_request_without_a_session() {
         let mut req = base_req();
         req.url = "https://www.instagram.com/user/".to_string();
         req.cookies_from_browser = Some("definitely-not-a-browser".to_string());
-        super::resolve_cookie_capture(&mut req);
-        assert!(
-            req.cookies_file.is_some() || req.cookies_from_browser.is_some(),
-            "capture must never strip the session from the request"
+        super::resolve_cookie_browser(&mut req);
+        assert_eq!(
+            req.cookies_from_browser.as_deref(),
+            Some("definitely-not-a-browser"),
+            "an unknown browser is a validation error, not something to rewrite"
         );
-        if let Some(p) = req.cookies_file.as_ref() {
-            assert!(p.is_file(), "a captured profile must exist on disk: {p:?}");
-        }
+        assert!(req.cookies_file.is_none());
     }
 
     #[test]
@@ -1676,6 +1761,27 @@ profile, or this profile has no videos posted";
         assert!(!super::is_challenge_exhausted_line(
             "Failed to retrieve rehydration data (0/0)"
         ));
+    }
+
+    #[test]
+    fn cookie_noise_detection() {
+        assert!(super::is_cookie_noise(
+            "[cookies][error] 'secretstorage' Python package not available"
+        ));
+        assert!(super::is_cookie_noise(
+            "[cookies][warning] Failed to decrypt cookie (AES-CBC)"
+        ));
+        assert!(super::is_cookie_noise(
+            "[cookies][info] Extracted 285 cookies from Brave (150 could not be decrypted)"
+        ));
+        assert!(super::is_cookie_noise(
+            "[cookies][info] Extracted 435 cookies from Brave"
+        ));
+        // Real errors should NOT be filtered
+        assert!(!super::is_cookie_noise(
+            "[vsco][error] HttpError: '403 Forbidden' for 'https://vsco.co/example_user/gallery'"
+        ));
+        assert!(!super::is_cookie_noise("[download] file.mp4 done"));
     }
 
     #[test]
