@@ -385,7 +385,8 @@ mod tests {
     fn run_capturing_not_found() {
         let res = Executor::run_capturing("definitely-not-a-binary-12345", &[]);
         assert!(res.is_err());
-        assert!(format!("{}", res.unwrap_err()).contains("not found"));
+        let err = format!("{}", res.unwrap_err());
+        assert!(err.contains("not found") || err.contains("no encontrado"));
     }
 
     #[test]

@@ -1,1 +1,9 @@
-{}
+{
+  "error_io": "error de E/S: {source}",
+  "error_invalid_url": "URL inválida: {url}\n  ayuda: usa una URL http(s) válida, p. ej. https://example.com/gallery/123\n  nota: esquemas válidos http/https y longitud ≤2048",
+  "error_backend_not_found": "backend '{name}' no encontrado en $PATH\n  ayuda: instala con 'pipx install {name}' o 'pacman -S {name}'\n  nota: se puede definir una ruta personalizada en ~/.config/scrapmf/config.toml",
+  "error_backend_failed": "backend '{name}' falló con código de salida {code}\n  stderr: {stderr}\n  ayuda: revisa los logs de {name} con --verbose\n  nota: RUST_LOG=debug para tracing detallado",
+  "error_config_parse": "error de parseo de config en {path}: {source}\n  ayuda: revisa la sintaxis TOML\n  nota: ver https://toml.io/en/v1.0.0",
+  "error_aborted": "cancelado por el usuario",
+  "exit_code_unavailable": "no disponible (proceso terminado por una señal)"
+}
