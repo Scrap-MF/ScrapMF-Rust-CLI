@@ -15,7 +15,11 @@ use std::path::{Path, PathBuf};
 ///    https://codeberg.org/mikf/gallery-dl/releases/tag/v{PIN}
 /// 2. Update this constant, run the full test suite.
 /// 3. Cut a new scrapmf release — users get the new pin via `scrapmf setup`.
-pub const GALLERY_DL_PIN: &str = "1.33.0-dev";
+pub const GALLERY_DL_PIN: &str = "1.32.19";
+
+/// Pinned yt-dlp version managed by scrapmf (used by gallery-dl's ytdl
+/// fallback). Standalone builds published by upstream on GitHub.
+pub const YT_DLP_PIN: &str = "2026.10.26";
 
 /// Git ref (commit) of the dev build of gallery-dl that ships the Instagram
 /// reels/stories fix. Only used when [`GALLERY_DL_PIN`] is a dev version.
@@ -233,6 +237,43 @@ pub fn extract_sha256_for(sums_content: &str, filename: &str) -> Option<String> 
         }
     }
     None
+}
+
+/// Standalone yt-dlp asset name for the current OS.
+pub fn yt_dlp_asset() -> &'static str {
+    if cfg!(windows) {
+        "yt-dlp.exe"
+    } else if cfg!(target_os = "macos") {
+        "yt-dlp_macos"
+    } else {
+        "yt-dlp"
+    }
+}
+
+/// Base URL of the pinned yt-dlp release assets on GitHub.
+pub fn yt_dlp_release_base_url() -> String {
+    format!(
+        "https://github.com/yt-dlp/yt-dlp/releases/download/{}",
+        YT_DLP_PIN
+    )
+}
+
+/// Managed yt-dlp binary path if already installed.
+pub fn yt_dlp_managed_path() -> Option<PathBuf> {
+    let dir = managed_dir()?;
+    let p = dir.join(yt_dlp_asset());
+    p.is_file().then_some(p)
+}
+
+/// Resolve yt-dlp executable: managed (pinned) only — never the system one.
+pub fn yt_dlp_executable() -> anyhow::Result<PathBuf> {
+    if let Some(p) = yt_dlp_managed_path() {
+        return Ok(p);
+    }
+    Err(anyhow::anyhow!(
+        "yt-dlp backend is not installed\n  help: run 'scrapmf setup' to install the \
+         bundled pinned v{YT_DLP_PIN} build"
+    ))
 }
 
 #[cfg(test)]

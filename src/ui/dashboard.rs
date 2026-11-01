@@ -250,7 +250,7 @@ fn draw(
         ));
     } else {
         lines.push(Line::styled(
-            "Ctrl-C: abortar",
+            "Ctrl-C: abort",
             Style::default()
                 .fg(Color::DarkGray)
                 .add_modifier(Modifier::ITALIC),
@@ -289,7 +289,7 @@ fn draw(
             })
             .collect();
         let title = if log_scroll > 0 {
-            " log (↑↓ scroll · siga ↓) "
+            " log (↑↓ scroll · more ↓) "
         } else {
             " log (↑↓ scroll) "
         };
