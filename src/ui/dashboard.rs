@@ -294,7 +294,7 @@ fn draw(
         let title = if log_scroll > 0 {
             crate::i18n::t("log_more")
         } else {
-            " log (↑↓ scroll) ".to_string()
+            crate::i18n::t("log_scroll_hint")
         };
         let log_block = Paragraph::new(log_lines)
             .block(

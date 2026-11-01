@@ -461,5 +461,12 @@
   "editor_exited_code": "el editor salió con {code}",
   "error_launch_editor": "error: no se pudo lanzar el editor {editor}: {e}",
   "warn_skipping_invalid_url": "aviso: se omite la URL inválida {url}",
-  "skipping_unreadable_file": "omitiendo: este proceso puede leer un archivo 0o000"
+  "skipping_unreadable_file": "omitiendo: este proceso puede leer un archivo 0o000",
+  "log_scroll_hint": " log (↑↓ desplazar) ",
+  "multi_hint": "↑↓ mover · ⏎ elegir este · espacio más · a todo/ninguno · {tail}",
+  "key_hint_back": "↑↓ mover · ⏎ confirmar · {esc} · ctrl+c cancelar",
+  "hint_yes_esc_back": "⏎ sí · esc volver",
+  "hint_yes_no_esc_back": "⏎ sí · n no · esc volver",
+  "hint_dismiss": "⏎ o esc cerrar",
+  "back_not_a_value": "Volver no es un valor"
 }

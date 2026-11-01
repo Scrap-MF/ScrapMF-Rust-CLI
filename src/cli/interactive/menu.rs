@@ -58,16 +58,13 @@ fn multi_hint(back: bool) -> String {
     } else {
         crate::i18n::t("esc_cancel")
     };
-    format!("↑↓ move · ⏎ pick this one · space adds more · a all/none · {tail}")
+    crate::i18n::tf("multi_hint", &[("tail", &tail)])
 }
 
 /// Hint line describing the keys, shown in prompts that support going back.
 pub fn key_hint(back: bool) -> String {
     if back {
-        format!(
-            "↑↓ move · ⏎ confirm · {} · ctrl+c cancel",
-            crate::i18n::t("esc_back")
-        )
+        crate::i18n::tf("key_hint_back", &[("esc", &crate::i18n::t("esc_back"))])
     } else {
         format!("⏎ confirm · {}", crate::i18n::t("esc_cancel"))
     }
@@ -316,9 +313,9 @@ pub fn confirm_box(
         // Enter confirms everywhere in this app, and Esc is the way back, so
         // the hint says exactly that. Marking Enter as crate::i18n::t("no") here was the
         // opposite of what every other prompt does.
-        "⏎ yes · esc back"
+        &crate::i18n::t("hint_yes_esc_back")
     } else {
-        "⏎ yes · n no · esc back"
+        &crate::i18n::t("hint_yes_no_esc_back")
     };
 
     let mut boxed = match BoxedPrompt::enter(context) {
@@ -427,7 +424,7 @@ pub fn notice(context: &str, lines: &[String]) -> Step<()> {
                 ratatui::text::Line::styled(line.clone(), style)
             })
             .collect();
-        if draw_boxed(title, terminal, body, "⏎ or esc dismiss").is_err() {
+        if draw_boxed(title, terminal, body, &crate::i18n::t("hint_dismiss")).is_err() {
             break;
         }
         if !crossterm::event::poll(std::time::Duration::from_millis(50)).unwrap_or(false) {
@@ -776,7 +773,8 @@ mod tests {
         assert_eq!(
             Step::<u8>::Back.map(|n| n * 2),
             Step::Back,
-            "Back is not a value"
+            "{}",
+            crate::i18n::t("back_not_a_value")
         );
         assert_eq!(Step::<u8>::Cancel.map(|n| n * 2), Step::Cancel);
     }

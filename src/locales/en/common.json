@@ -461,5 +461,12 @@
   "editor_exited_code": "editor exited with {code}",
   "error_launch_editor": "error: launch editor {editor}: {e}",
   "warn_skipping_invalid_url": "warn: skipping invalid url {url}",
-  "skipping_unreadable_file": "skipping: this process can read a 0o000 file"
+  "skipping_unreadable_file": "skipping: this process can read a 0o000 file",
+  "log_scroll_hint": " log (↑↓ scroll) ",
+  "multi_hint": "↑↓ move · ⏎ pick this one · space adds more · a all/none · {tail}",
+  "key_hint_back": "↑↓ move · ⏎ confirm · {esc} · ctrl+c cancel",
+  "hint_yes_esc_back": "⏎ yes · esc back",
+  "hint_yes_no_esc_back": "⏎ yes · n no · esc back",
+  "hint_dismiss": "⏎ or esc dismiss",
+  "back_not_a_value": "Back is not a value"
 }
