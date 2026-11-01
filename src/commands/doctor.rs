@@ -195,6 +195,21 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
         ok = false;
     }
 
+    // Check yt-dlp (managed/pinned only)
+    match crate::application::backend::yt_dlp_executable() {
+        Ok(p) => out.push(CheckLine {
+            level: Level::Success,
+            text: format!("yt-dlp found (managed) at {}", p.display()),
+        }),
+        Err(_) => {
+            out.push(CheckLine {
+                level: Level::Warn,
+                text: "yt-dlp not installed (optional; used by gallery-dl ytdl fallback)"
+                    .to_string(),
+            });
+        }
+    }
+
     // Check threadstractormf via the plugins system
     {
         use crate::plugins::PluginState;
