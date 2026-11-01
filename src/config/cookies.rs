@@ -202,6 +202,27 @@ pub fn to_netscape(cookies: &[StoredCookie]) -> String {
     out
 }
 
+/// Netscape content with the `scrapmf-source` comment placed *after* the
+/// mandatory header.
+///
+/// `MozillaCookieJar` (yt-dlp, curl, browser extensions) requires
+/// `# Netscape HTTP Cookie File` on the first line and rejects the file
+/// otherwise. gallery-dl's parser is tolerant, which is why the old order went
+/// unnoticed even though the exported file was not portable.
+pub fn to_netscape_with_source(
+    cookies: &[StoredCookie],
+    browser: &str,
+    networks: &[String],
+) -> String {
+    let mut out = String::from(NETSCAPE_HEADER);
+    out.push_str(&source_metadata_line(browser, networks));
+    for c in cookies {
+        out.push_str(&cookie_to_netscape_line(c));
+        out.push('\n');
+    }
+    out
+}
+
 // ─── Profile CRUD ───────────────────────────────────────────────────────────
 
 /// Load + validate a profile file. Returns the parsed cookies.
@@ -260,11 +281,7 @@ pub fn capture_predates_browser(capture: &std::path::Path, channel: &str) -> boo
     let Some(ch) = crate::browsers::resolve_channel(channel) else {
         return false;
     };
-    let db_name = if ch.id == "firefox" {
-        "cookies.sqlite"
-    } else {
-        "Cookies"
-    };
+    let db_name = crate::browsers::cookie_db_filename(ch);
     let Some(db) = crate::browsers::find_cookie_db(ch, db_name) else {
         return false;
     };
@@ -526,8 +543,7 @@ pub fn capture_firefox(sites: &[String], profile_name: &str) -> Result<(PathBuf,
             ));
         }
         let count = cookies.len();
-        let content = to_netscape(&cookies);
-        let content = format!("{}{content}", source_metadata_line("firefox", sites));
+        let content = to_netscape_with_source(&cookies, "firefox", sites);
         let path = save_profile(profile_name, &content)?;
         Ok((path, count))
     })();
@@ -1371,8 +1387,7 @@ pub fn capture_chromium(
         }
 
         let count = cookies.len();
-        let mut content = to_netscape(&cookies);
-        content = format!("{}{content}", source_metadata_line(browser, sites));
+        let content = to_netscape_with_source(&cookies, browser, sites);
         let path = save_profile(profile_name, &content)?;
         Ok((path, count))
     })();
@@ -1526,6 +1541,29 @@ mod tests {
             assert_eq!(a.expires, b.expires);
             assert_eq!(a.http_only, b.http_only);
         }
+    }
+
+    /// `MozillaCookieJar` — and therefore yt-dlp, curl and browser extensions —
+    /// requires the header on the first line. The origin comment used to be
+    /// prepended, which gallery-dl tolerated and every other reader rejected.
+    #[test]
+    fn source_metadata_follows_the_netscape_header() {
+        let cookies = parse_netscape(SAMPLE).expect("parse");
+        let out = to_netscape_with_source(&cookies, "brave-origin", &["vsco".to_string()]);
+        let first = out.lines().next().expect("first line");
+        assert_eq!(first, "# Netscape HTTP Cookie File");
+        let meta = out
+            .lines()
+            .position(|l| l.starts_with("# scrapmf-source: "))
+            .expect("source metadata must be present");
+        assert!(meta > 0, "the source comment must not precede the header");
+        assert_eq!(
+            parse_source_metadata(&out)
+                .expect("metadata parses")
+                .browser,
+            "brave-origin"
+        );
+        assert_eq!(parse_netscape(&out).expect("still valid").len(), 2);
     }
 
     /// Encrypt like Chromium does (v10): AES-128-CBC, IV of 16 spaces,
