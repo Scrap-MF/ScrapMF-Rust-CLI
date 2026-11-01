@@ -419,7 +419,7 @@ pub(super) fn jobs_for_account(c: &AccountCtx) -> Result<Vec<ScrapeJob>, String>
 /// question of a flow, and backing out of it used to abandon the whole run.
 pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config) -> Step<()> {
     if requests.is_empty() {
-        println!("ℹ No content selected");
+        println!("{}", crate::i18n::t("no_content_selected"));
         return Step::Value(());
     }
     // The summary and the decision share one box, so the confirmation looks
@@ -1053,7 +1053,7 @@ pub(super) fn prompt_scrape_direct_urls() {
     'urls: loop {
         let (urls, _errors) = loop {
             let raw = match crate::cli::interactive::menu::input_text_back(
-                "Download content ─ URL(s)",
+                &crate::i18n::t("download_content_urls"),
                 "Paste URL(s) — separate with spaces or commas:",
                 "https://www.tiktok.com/@user/video/123 https://www.instagram.com/reel/xyz/",
                 "each URL is matched against your sites/*.toml patterns",
@@ -1074,7 +1074,7 @@ pub(super) fn prompt_scrape_direct_urls() {
             // or the preview re-fills the box instead of losing the batch.
             previous = raw;
             if urls.is_empty() {
-                println!("ℹ No valid URLs — Esc to cancel");
+                println!("{}", crate::i18n::t("no_valid_urls_esc_cancel"));
                 continue;
             }
             break (urls, errors);
@@ -1160,7 +1160,10 @@ fn direct_url_jobs(urls: &[String], cfg: &config::Config) -> Vec<ScrapeJob> {
                 "direct link".to_string(),
             ));
         } else {
-            println!("ℹ {url} — no sites/*.toml match; using general config");
+            println!(
+                "{}",
+                crate::i18n::tf("no_site_match_using_general", &[("url", url)])
+            );
             jobs.push((
                 ScrapeRequest {
                     url: url.clone(),
@@ -1248,7 +1251,7 @@ fn username_prompt(site: &str, initial: &str) -> Option<String> {
         "Username (without @):"
     };
     match crate::cli::interactive::menu::input_text_back(
-        &format!("Download content ─ {site}"),
+        &crate::i18n::tf("download_content_site", &[("site", site)]),
         prompt,
         "someuser",
         "",
@@ -1335,7 +1338,7 @@ pub(super) fn prompt_quick_scrape() {
                 &super::theme::brand_account_label(&format!("{site_name}:{raw_input}")),
             ) {
                 Step::Value(k) if k.is_empty() => {
-                    println!("ℹ No content selected");
+                    println!("{}", crate::i18n::t("no_content_selected"));
                     return;
                 }
                 Step::Value(k) => k,
