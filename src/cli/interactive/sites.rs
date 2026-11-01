@@ -54,37 +54,49 @@ pub(super) fn configuration_submenu() {
     let cfg = crate::config::load().unwrap_or_default();
 
     loop {
-        let outcome = Browser::new("Configuration")
+        let outcome = Browser::new(crate::i18n::t("configuration"))
             .entry(
                 crate::i18n::t("cookie_profiles"),
                 vec![
-                    "Named cookie sets captured from your browser.".to_string(),
-                    "Used by accounts to access private content.".to_string(),
+                    crate::i18n::t("named_cookie_sets_captured"),
+                    crate::i18n::t("used_by_accounts_private_content"),
                 ],
             )
             .entry(crate::i18n::t("manage_sites"), {
-                let mut d = vec!["Site configs (editable with $EDITOR):".to_string()];
+                let mut d = vec![crate::i18n::t("site_configs_editable_editor")];
                 if sites.is_empty() {
-                    d.push("  (none found)".to_string());
+                    d.push(crate::i18n::t("none_found_indented"));
                 }
                 d.extend(sites.iter().map(|s| format!("  · {s}")));
                 d
             })
             .entry(
                 crate::i18n::t("manage_profiles"),
-                vec![format!("{profiles_count} saved scraping profile(s).")],
+                vec![crate::i18n::tf(
+                    "saved_scraping_profiles_count",
+                    &[("count", &profiles_count.to_string())],
+                )],
             )
             .entry(
                 crate::i18n::t("general_settings"),
                 vec![
-                    format!(
-                        "output dir : {}",
-                        crate::config::expand_output_dir(&cfg.general.output_dir).display()
+                    crate::i18n::tf(
+                        "output_dir_colon",
+                        &[(
+                            "path",
+                            &crate::config::expand_output_dir(&cfg.general.output_dir)
+                                .display()
+                                .to_string(),
+                        )],
                     ),
-                    format!(
-                        "archive    : {}",
-                        if cfg.general.archive { "on" } else { "off" }
-                    ),
+                    {
+                        let st = if cfg.general.archive {
+                            crate::i18n::t("on")
+                        } else {
+                            crate::i18n::t("off")
+                        };
+                        crate::i18n::tf("archive_colon", &[("state", &st)])
+                    },
                 ],
             )
             .entry(
@@ -170,52 +182,56 @@ fn browser_cookies_menu(current: Option<&str>) {
     // that is installed in an unusual way is still selectable.
     let (ready, missing): (Vec<_>, Vec<_>) = detected.iter().partition(|b| b.available);
 
-    const NONE: &str = "None — do not use browser cookies";
+    let none_label = crate::i18n::t("none_no_browser_cookies");
     let mut opts: Vec<(String, Vec<String>)> = Vec::new();
     let mut ids: Vec<Option<String>> = Vec::new();
 
     for b in &ready {
-        let mut detail = vec![format!("id: {}", b.id)];
+        let mut detail = vec![crate::i18n::tf("id_colon", &[("id", b.id)])];
         if let Some(db) = &b.cookie_db {
             let size = std::fs::metadata(db).map(|m| m.len() / 1024).unwrap_or(0);
             let mtime = cookie_db_mtime(db);
             if mtime.is_empty() {
-                detail.push(format!("cookie DB ({size} KB)"));
+                detail.push(crate::i18n::tf(
+                    "cookie_db_kb",
+                    &[("size", &size.to_string())],
+                ));
             } else {
-                detail.push(format!("cookie DB ({size} KB), updated {mtime}"));
+                detail.push(crate::i18n::tf(
+                    "cookie_db_kb_updated",
+                    &[("size", &size.to_string()), ("mtime", &mtime)],
+                ));
             }
         }
         if let Some(p) = &b.profile {
-            detail.push(format!("profile: {p}"));
+            detail.push(crate::i18n::tf("profile_colon", &[("profile", p)]));
         }
-        // Which account this actually is. For private content this is the only
-        // detail that matters — two browsers logged into two accounts behave
-        // differently and nothing said which one was being sent.
         match crate::config::cookies::instagram_account_for_channel(b.id) {
-            Some(acct) => detail.push(format!("Instagram account: {acct}")),
-            None => {
-                detail.push("Instagram account: unknown — captured on the first scrape".to_string())
-            }
+            Some(acct) => detail.push(crate::i18n::tf(
+                "instagram_account_colon",
+                &[("account", &acct)],
+            )),
+            None => detail.push(crate::i18n::t("instagram_account_unknown_first_scrape")),
         }
         if current == Some(b.id) {
-            detail.push("← currently selected".to_string());
+            detail.push(crate::i18n::t("currently_selected_arrow"));
         }
         opts.push((b.display.clone(), detail));
         ids.push(Some(b.id.to_string()));
     }
     for b in &missing {
         opts.push((
-            format!("{} (not usable)", b.display),
+            crate::i18n::tf("not_usable_paren", &[("display", &b.display)]),
             vec![
-                format!("id: {}", b.id),
-                "browser binary or cookie database not found".to_string(),
+                crate::i18n::tf("id_colon", &[("id", b.id)]),
+                crate::i18n::t("browser_binary_or_cookie_db_not_found"),
             ],
         ));
         ids.push(Some(b.id.to_string()));
     }
     opts.push((
-        NONE.to_string(),
-        vec!["scrape anonymously; no session is sent".to_string()],
+        none_label.clone(),
+        vec![crate::i18n::t("scrape_anonymously_no_session")],
     ));
     ids.push(None);
 
@@ -237,10 +253,15 @@ fn browser_cookies_menu(current: Option<&str>) {
         .unwrap_or_else(|| "unknown".to_string());
     match crate::config::save(&cfg) {
         Ok(()) => {
-            let label = chosen.clone().unwrap_or_else(|| "none (anonymous)".into());
+            let label = chosen
+                .clone()
+                .unwrap_or_else(|| crate::i18n::t("none_anonymous"));
             notice_in(
                 &crate::i18n::t("config_general_settings"),
-                &[format!("✔ browser cookies: {label} → {cfg_path}")],
+                &[crate::i18n::tf(
+                    "browser_cookies_saved",
+                    &[("label", &label), ("path", &cfg_path)],
+                )],
             );
         }
         Err(e) => notice_in(
@@ -257,15 +278,15 @@ fn general_settings_menu() {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "unknown".to_string());
         let archive_label = if cfg.general.archive {
-            "enabled"
+            crate::i18n::t("enabled")
         } else {
-            "disabled"
+            crate::i18n::t("disabled")
         };
         let browser_label = match cfg.general.cookies_from_browser.as_deref() {
             Some(id) => crate::browsers::resolve_channel(id)
                 .map(|c| c.display.to_string())
-                .unwrap_or_else(|| format!("{id} (not installed)")),
-            None => "not set — anonymous".to_string(),
+                .unwrap_or_else(|| crate::i18n::tf("not_installed_paren", &[("id", id)])),
+            None => crate::i18n::t("not_set_anonymous"),
         };
         let options: Vec<String> = vec![
             format!(
@@ -285,16 +306,19 @@ fn general_settings_menu() {
             .map(|o| {
                 let details = if o.starts_with(&format!("{}:", crate::i18n::t("output_directory")))
                 {
-                    vec![format!("current: {}", cfg.general.output_dir.display())]
+                    vec![crate::i18n::tf(
+                        "current_colon",
+                        &[("value", &cfg.general.output_dir.display().to_string())],
+                    )]
                 } else if o.starts_with(&format!("{}:", crate::i18n::t("browser_cookies"))) {
                     vec![match cfg.general.cookies_from_browser.as_deref() {
-                        Some(id) => format!("currently: {id} — used for every site"),
-                        None => "currently: none — every site scrapes anonymously".to_string(),
+                        Some(id) => crate::i18n::tf("currently_used_every_site", &[("id", id)]),
+                        None => crate::i18n::t("currently_none_anonymous"),
                     }]
                 } else if o.starts_with(&format!("{}:", crate::i18n::t("download_archive"))) {
-                    vec![format!("archive is {archive_label}")]
+                    vec![crate::i18n::tf("archive_is", &[("label", &archive_label)])]
                 } else if o.starts_with(&format!("{}:", crate::i18n::t("language"))) {
-                    vec!["en or es".to_string()]
+                    vec![crate::i18n::t("en_or_es")]
                 } else {
                     Vec::new()
                 };
@@ -313,7 +337,7 @@ fn general_settings_menu() {
             let current = cfg.general.output_dir.display().to_string();
             let Ok(new_val) = Text::new(&crate::i18n::t("output_directory"))
                 .with_default(&current)
-                .with_help_message("e.g. ~/scrapmf, ~/Pictures/scrapmf — tilde ~/ is expanded")
+                .with_help_message(&crate::i18n::t("help_output_dir_example"))
                 .prompt()
             else {
                 continue;
@@ -326,7 +350,7 @@ fn general_settings_menu() {
             if let Err(e) = crate::application::scraper::validate_output_path(&new_path) {
                 notice_in(
                     &crate::i18n::t("config_general_settings"),
-                    &[format!("✖ invalid path: {e}")],
+                    &[crate::i18n::tf("invalid_path_x", &[("e", &e.to_string())])],
                 );
                 continue;
             }
@@ -336,8 +360,7 @@ fn general_settings_menu() {
             {
                 notice_in(
                     &crate::i18n::t("config_general_settings"),
-                    &["✖ output directory cannot be $HOME itself — use a subdirectory like ~/scrapmf"
-                        .to_string()],
+                    &[crate::i18n::t("output_dir_cannot_be_home")],
                 );
                 continue;
             }
@@ -346,19 +369,23 @@ fn general_settings_menu() {
             match crate::config::save(&new_cfg) {
                 Ok(()) => notice_in(
                     &crate::i18n::t("config_general_settings"),
-                    &[format!("✔ saved → {cfg_path}")],
+                    &[crate::i18n::tf("saved_to_path", &[("path", &cfg_path)])],
                 ),
                 Err(e) => notice_in(
                     &crate::i18n::t("config_general_settings"),
-                    &[format!("✖ save failed: {e}")],
+                    &[crate::i18n::tf("save_failed_x", &[("e", &e.to_string())])],
                 ),
             }
         } else if choice.starts_with(&format!("{}:", crate::i18n::t("browser_cookies"))) {
             browser_cookies_menu(cfg.general.cookies_from_browser.as_deref());
         } else if choice.starts_with(&format!("{}:", crate::i18n::t("download_archive"))) {
             let new_val = !cfg.general.archive;
-            let label = if new_val { "enabled" } else { "disabled" };
-            let prompt = format!("Turn download archive {label}?");
+            let label = if new_val {
+                crate::i18n::t("enabled")
+            } else {
+                crate::i18n::t("disabled")
+            };
+            let prompt = crate::i18n::tf("turn_download_archive", &[("label", &label)]);
             let ok = crate::cli::interactive::menu::confirm_back(
                 &crate::i18n::t("config_general_settings"),
                 &prompt,
@@ -375,11 +402,14 @@ fn general_settings_menu() {
             match crate::config::save(&new_cfg) {
                 Ok(()) => notice_in(
                     &crate::i18n::t("config_general_settings"),
-                    &[format!("✔ archive {label} → {cfg_path}")],
+                    &[crate::i18n::tf(
+                        "archive_saved",
+                        &[("label", &label), ("path", &cfg_path)],
+                    )],
                 ),
                 Err(e) => notice_in(
                     &crate::i18n::t("config_general_settings"),
-                    &[format!("✖ save failed: {e}")],
+                    &[crate::i18n::tf("save_failed_x", &[("e", &e.to_string())])],
                 ),
             }
         } else if choice.starts_with(&format!("{}:", crate::i18n::t("language"))) {
@@ -388,7 +418,12 @@ fn general_settings_menu() {
                 &crate::i18n::t("config_general_settings_language"),
                 langs
                     .iter()
-                    .map(|l| (l.clone(), vec![format!("set language to {l}")]))
+                    .map(|l| {
+                        (
+                            l.clone(),
+                            vec![crate::i18n::tf("set_language_to", &[("lang", l)])],
+                        )
+                    })
                     .collect(),
             ) {
                 crate::cli::interactive::menu::Step::Value(i) => i,
@@ -400,11 +435,14 @@ fn general_settings_menu() {
             match crate::config::save(&new_cfg) {
                 Ok(()) => notice_in(
                     &crate::i18n::t("config_general_settings"),
-                    &[format!("✔ language {new_lang} → {cfg_path}")],
+                    &[crate::i18n::tf(
+                        "language_saved",
+                        &[("lang", &new_lang), ("path", &cfg_path)],
+                    )],
                 ),
                 Err(e) => notice_in(
                     &crate::i18n::t("config_general_settings"),
-                    &[format!("✖ save failed: {e}")],
+                    &[crate::i18n::tf("save_failed_x", &[("e", &e.to_string())])],
                 ),
             }
         } else if choice == crate::i18n::t("show_config_path") {
@@ -462,7 +500,12 @@ fn create_profile_wizard() {
         &crate::i18n::t("config_cookie_capture_browser"),
         browsers
             .iter()
-            .map(|b| (b.clone(), vec![format!("capture from {b}")]))
+            .map(|b| {
+                (
+                    b.clone(),
+                    vec![crate::i18n::tf("capture_from", &[("browser", b)])],
+                )
+            })
             .collect(),
     ) {
         crate::cli::interactive::menu::Step::Value(i) => i,
@@ -485,11 +528,14 @@ fn create_profile_wizard() {
         networks.push("threads");
     }
     let net_opts: Vec<(String, Vec<String>)> = {
-        let mut v = vec![("All networks".to_string(), vec!["select all".to_string()])];
+        let mut v = vec![(
+            crate::i18n::t("all_networks"),
+            vec![crate::i18n::t("select_all")],
+        )];
         v.extend(networks.iter().map(|s| {
             (
                 super::theme::brand_site_label(s),
-                vec![format!("domain: {}", s)],
+                vec![crate::i18n::tf("domain_colon", &[("domain", s)])],
             )
         }));
         v
@@ -507,14 +553,16 @@ fn create_profile_wizard() {
         .filter_map(|i| net_opts.get(i).map(|(l, _)| l.clone()))
         .collect();
     if picked_raw.is_empty() {
-        notice(&["ℹ No networks selected".to_string()]);
+        notice(&[crate::i18n::t("no_networks_selected")]);
         return;
     }
     // Labels carry ANSI; map back to clean keys via brand_site_label output.
     let mut sites: Vec<String> = Vec::new();
     for picked in &picked_raw {
         for net in &networks {
-            if super::theme::brand_site_label(net) == *picked || picked == "All networks" {
+            if super::theme::brand_site_label(net) == *picked
+                || *picked == crate::i18n::t("all_networks")
+            {
                 sites.push((*net).to_string());
                 break;
             }
@@ -524,7 +572,7 @@ fn create_profile_wizard() {
     sites.dedup();
 
     let suggested = format!("{}-{}", browser.to_lowercase(), sites.join("-"));
-    let Some(name) = Text::new("Profile name:")
+    let Some(name) = Text::new(&crate::i18n::t("profile_name"))
         .with_default(&suggested)
         .prompt()
         .ok()
@@ -541,10 +589,16 @@ fn create_profile_wizard() {
     };
     match result {
         Ok((path, count)) => notice(&[
-            format!("✔ {count} cookie(s) → {}", path.display()),
-            "⚠ Cookie files grant account access — never share them.".to_string(),
+            crate::i18n::tf(
+                "cookies_captured_count",
+                &[
+                    ("count", &count.to_string()),
+                    ("path", &path.display().to_string()),
+                ],
+            ),
+            crate::i18n::t("cookie_files_grant_access_warning"),
         ]),
-        Err(e) => notice(&[format!("✖ {e}")]),
+        Err(e) => notice(&[crate::i18n::tf("error_x", &[("e", &e.to_string())])]),
     }
 }
 
@@ -554,25 +608,25 @@ fn cookie_profiles_menu() {
         clear_screen();
         let count = cookies::list_profiles().len();
         let browse_label = if count == 0 {
-            "Browse profiles".to_string()
+            crate::i18n::t("browse_profiles")
         } else {
-            format!("Browse profiles ({count})")
+            crate::i18n::tf("browse_profiles_count", &[("count", &count.to_string())])
         };
         let choices: Vec<String> = vec![
             browse_label,
-            "Create profile — capture from browser".into(),
-            "Import profile — from file or paste".into(),
+            crate::i18n::t("create_profile_capture_browser"),
+            crate::i18n::t("import_profile_from_file_paste"),
             crate::i18n::t("back"),
         ];
         let choice = match select_menu(&crate::i18n::t("cookie_profiles"), choices).prompt() {
             Ok(c) => c,
             Err(_) => return,
         };
-        if choice.starts_with("Browse profiles") {
+        if choice.starts_with(&crate::i18n::t("browse_profiles")) {
             browse_profiles_menu();
-        } else if choice.starts_with("Create profile") {
+        } else if choice.starts_with(&crate::i18n::t("create_profile_capture_browser")) {
             create_profile_wizard();
-        } else if choice.starts_with("Import profile") {
+        } else if choice.starts_with(&crate::i18n::t("import_profile_from_file_paste")) {
             import_profile_submenu();
         } else {
             return;
@@ -585,7 +639,7 @@ fn browse_profiles_menu() {
     loop {
         let names = cookies::list_profiles();
         if names.is_empty() {
-            notice(&["ℹ No profiles yet — use Create or Import first".to_string()]);
+            notice(&[crate::i18n::t("no_profiles_yet_create_import")]);
             return;
         }
         let rows: Vec<String> = names
@@ -595,7 +649,9 @@ fn browse_profiles_menu() {
                 Err(e) => format!("{name}  — ⚠ {e}"),
             })
             .collect();
-        let Ok(picked_row) = select_menu("Browse profiles — select one", rows).prompt() else {
+        let Ok(picked_row) =
+            select_menu(&crate::i18n::t("browse_profiles_select_one"), rows).prompt()
+        else {
             return;
         };
         let name = picked_row.split("  — ").next().unwrap_or("").to_string();

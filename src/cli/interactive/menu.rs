@@ -53,16 +53,23 @@ impl<T> Step<T> {
 /// it picks the highlighted row unless rows are already checked, so crate::i18n::t("confirm")
 /// alone both hid the `Space` shortcut and described the wrong behaviour.
 fn multi_hint(back: bool) -> String {
-    let tail = if back { "esc back" } else { "esc cancel" };
+    let tail = if back {
+        crate::i18n::t("esc_back")
+    } else {
+        crate::i18n::t("esc_cancel")
+    };
     format!("↑↓ move · ⏎ pick this one · space adds more · a all/none · {tail}")
 }
 
 /// Hint line describing the keys, shown in prompts that support going back.
 pub fn key_hint(back: bool) -> String {
     if back {
-        "↑↓ move · ⏎ confirm · esc back · ctrl+c cancel".to_string()
+        format!(
+            "↑↓ move · ⏎ confirm · {} · ctrl+c cancel",
+            crate::i18n::t("esc_back")
+        )
     } else {
-        "⏎ confirm · esc cancel".to_string()
+        format!("⏎ confirm · {}", crate::i18n::t("esc_cancel"))
     }
 }
 
@@ -718,8 +725,8 @@ mod tests {
 
     #[test]
     fn hint_advertises_back_only_when_supported() {
-        assert!(key_hint(true).contains("esc back"));
-        assert!(!key_hint(false).contains("back"));
+        assert!(key_hint(true).contains(&crate::i18n::t("esc_back")));
+        assert!(!key_hint(false).contains(&crate::i18n::t("esc_back")));
     }
 
     // ─── Yes/no confirmation ───────────────────────────────────────────────

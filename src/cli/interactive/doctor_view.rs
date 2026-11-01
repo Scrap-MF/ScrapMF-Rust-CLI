@@ -78,10 +78,13 @@ pub(crate) fn show() {
             let block = Paragraph::new(all).block(
                 Block::bordered()
                     .border_set(ratatui::symbols::border::ROUNDED)
-                    .title(" Doctor "),
+                    .title(crate::i18n::t("doctor_view_title")),
             );
             f.render_widget(block, chunks[0]);
-            f.render_widget(Paragraph::new("Enter to go back · q/Esc Cancel"), chunks[1]);
+            f.render_widget(
+                Paragraph::new(crate::i18n::t("doctor_view_footer")),
+                chunks[1],
+            );
         });
 
         let has_event =

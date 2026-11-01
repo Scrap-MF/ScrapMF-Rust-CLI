@@ -426,7 +426,10 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
     // like the rest of the app instead of dropping out of it. Without a TTY the
     // plain lines are kept, which is what scripts and CI rely on.
     let tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
-    let mut summary: Vec<String> = vec![format!("✔ Ready — {} job(s):", requests.len())];
+    let mut summary: Vec<String> = vec![crate::i18n::tf(
+        "ready_jobs",
+        &[("count", &requests.len().to_string())],
+    )];
     for (i, (req, site, username, kinds_desc)) in requests.iter().enumerate() {
         let out = req
             .output
@@ -444,7 +447,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
         // Enter is the fast path: the expected action is to continue.
         match crate::cli::interactive::menu::confirm_box(
             &crate::i18n::t("download_content"),
-            "Proceed?",
+            &crate::i18n::t("proceed"),
             &summary,
             true,
             false,
@@ -458,7 +461,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
         for line in &summary {
             println!("{line}");
         }
-        Confirm::new("Proceed?")
+        Confirm::new(&crate::i18n::t("proceed"))
             .with_render_config(super::theme::render_config())
             .with_default(false)
             .prompt()
@@ -487,7 +490,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                     &crate::providers::threadstractor::Threadstractor,
                 )
             {
-                let msg = "threads plugin is not enabled — enable it in scrapmf → Plugins (installs threadstractormf)".to_string();
+                let msg = crate::i18n::t("threads_plugin_not_enabled_scrape");
                 if !missing.contains(&msg) {
                     missing.push(msg);
                 }
@@ -496,7 +499,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                     &crate::providers::gallery_dl::GalleryDl,
                 )
             {
-                let msg = "gallery-dl not found — run `scrapmf setup`".to_string();
+                let msg = crate::i18n::t("gallery_dl_not_found_setup");
                 if !missing.contains(&msg) {
                     missing.push(msg);
                 }
@@ -741,29 +744,24 @@ pub(super) fn integrity_report_lines(
     let mut out = Vec::new();
 
     if !delete.is_empty() {
-        out.push((true, format!("{} file(s) look incomplete:", delete.len())));
+        out.push((
+            true,
+            crate::i18n::tf("files_look_incomplete", &[("n", &delete.len().to_string())]),
+        ));
         for (path, issue) in &delete {
             out.push((
                 true,
                 format!("    - {} ({})", path.display(), issue.description()),
             ));
         }
-        out.push((
-            true,
-            "    ↳ delete the file(s) above and re-run — deterministic filenames \
-             re-download only what is missing"
-                .to_string(),
-        ));
+        out.push((true, crate::i18n::t("delete_files_rerun_advice")));
     }
 
     if !leave.is_empty() {
         // Not a failure: these downloaded correctly.
         out.push((
             false,
-            format!(
-                "{} file(s) downloaded fine but use H.265/HEVC:",
-                leave.len()
-            ),
+            crate::i18n::tf("files_downloaded_hevc", &[("n", &leave.len().to_string())]),
         ));
         for (path, issue) in &leave {
             out.push((
@@ -771,18 +769,16 @@ pub(super) fn integrity_report_lines(
                 format!("    - {} ({})", path.display(), issue.description()),
             ));
         }
-        out.push((
-            false,
-            "    ↳ complete downloads — leave them. Play them with VLC, or convert with \
-             ffmpeg -i <file> -c:v libx264 -crf 20 <out>"
-                .to_string(),
-        ));
+        out.push((false, crate::i18n::t("complete_downloads_leave_vlc_ffmpeg")));
     }
 
     if !unknown.is_empty() {
         out.push((
             true,
-            format!("{} file(s) could not be read:", unknown.len()),
+            crate::i18n::tf(
+                "files_could_not_be_read",
+                &[("n", &unknown.len().to_string())],
+            ),
         ));
         for (path, issue) in &unknown {
             out.push((
@@ -790,12 +786,7 @@ pub(super) fn integrity_report_lines(
                 format!("    - {} ({})", path.display(), issue.description()),
             ));
         }
-        out.push((
-            true,
-            "    ↳ completeness is unknown — check permissions and free disk space, \
-             then re-run"
-                .to_string(),
-        ));
+        out.push((true, crate::i18n::t("completeness_unknown_advice")));
     }
     out
 }
@@ -1579,11 +1570,11 @@ mod integrity_report_tests {
         let out = integrity_report_lines(1, &[entry("clip.mp4", IntegrityIssue::HevcCodec)]);
         let joined = text(&out);
         assert!(
-            !joined.contains("delete"),
+            !joined.contains(&crate::i18n::t("delete_files_rerun_advice")),
             "complete HEVC file must not be told to delete itself:\n{joined}"
         );
         assert!(
-            joined.contains("complete"),
+            joined.contains(&crate::i18n::t("complete_downloads_leave_vlc_ffmpeg")),
             "must say the download is fine:\n{joined}"
         );
     }
@@ -1599,7 +1590,10 @@ mod integrity_report_tests {
             ],
         );
         let joined = text(&out);
-        assert!(joined.contains("delete"), "{joined}");
+        assert!(
+            joined.contains(&crate::i18n::t("delete_files_rerun_advice")),
+            "{joined}"
+        );
         assert!(joined.contains("a.part") && joined.contains("b.mp4"));
     }
 
@@ -1607,13 +1601,16 @@ mod integrity_report_tests {
     fn unreadable_files_get_their_own_advice() {
         let out = integrity_report_lines(1, &[entry("locked.mp4", IntegrityIssue::Unreadable)]);
         let joined = text(&out);
-        assert!(joined.contains("could not be read"), "{joined}");
         assert!(
-            joined.contains("unknown"),
+            joined.contains(&crate::i18n::tf("files_could_not_be_read", &[("n", "1")])),
+            "{joined}"
+        );
+        assert!(
+            joined.contains(&crate::i18n::t("completeness_unknown_advice")),
             "must say completeness is unknown:\n{joined}"
         );
         assert!(
-            !joined.contains("delete"),
+            !joined.contains(&crate::i18n::t("delete_files_rerun_advice")),
             "an unreadable file is not a reason to delete:\n{joined}"
         );
     }
@@ -1629,13 +1626,19 @@ mod integrity_report_tests {
             ],
         );
         let joined = text(&out);
-        assert!(joined.contains("look incomplete"), "{joined}");
+        assert!(
+            joined.contains(&crate::i18n::tf("files_look_incomplete", &[("n", "1")])),
+            "{joined}"
+        );
         assert!(joined.contains("H.265/HEVC"), "{joined}");
-        assert!(joined.contains("could not be read"), "{joined}");
+        assert!(
+            joined.contains(&crate::i18n::tf("files_could_not_be_read", &[("n", "1")])),
+            "{joined}"
+        );
         // The delete advice must be attached to the incomplete list only.
         let delete_line = out
             .iter()
-            .find(|(_, t)| t.contains("delete the file(s)"))
+            .find(|(_, t)| t.contains(&crate::i18n::t("delete_files_rerun_advice")))
             .map(|(e, _)| *e);
         assert_eq!(delete_line, Some(true), "delete advice goes to stderr");
     }

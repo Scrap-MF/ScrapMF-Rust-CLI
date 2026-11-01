@@ -235,7 +235,10 @@ pub(super) fn edit_with_editor(path: &std::path::Path) {
         .or_else(|_| std::env::var("VISUAL"))
         .unwrap_or_else(|_| "vi".to_string());
     if which::which(&editor).is_err() {
-        eprintln!("error: editor '{editor}' not found in $PATH");
+        eprintln!(
+            "{}",
+            crate::i18n::tf("editor_not_found", &[("editor", &editor)])
+        );
         return;
     }
     match std::process::Command::new(&editor).arg(path).status() {
@@ -249,12 +252,24 @@ pub(super) fn edit_with_editor(path: &std::path::Path) {
                 {
                     println!("✔ Saved {}", path.display());
                 } else {
-                    eprintln!("warn: file saved but TOML parse failed, check syntax");
+                    eprintln!("{}", crate::i18n::t("warn_toml_parse_failed"));
                 }
             }
         }
-        Ok(s) => eprintln!("editor exited with {:?}", s.code()),
-        Err(e) => eprintln!("error: launch editor {editor}: {e}"),
+        Ok(s) => eprintln!(
+            "{}",
+            crate::i18n::tf(
+                "editor_exited_code",
+                &[("code", &format!("{:?}", s.code()))]
+            )
+        ),
+        Err(e) => eprintln!(
+            "{}",
+            crate::i18n::tf(
+                "error_launch_editor",
+                &[("editor", &editor), ("e", &e.to_string())]
+            )
+        ),
     }
 }
 

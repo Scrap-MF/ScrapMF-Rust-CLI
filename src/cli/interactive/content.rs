@@ -158,7 +158,7 @@ pub(super) fn account_labels(site: &str, accounts: &[crate::config::Account]) ->
             .username
             .clone()
             .or_else(|| acc.display_name.clone())
-            .unwrap_or_else(|| "(no username)".to_string());
+            .unwrap_or_else(|| crate::i18n::t("no_username_placeholder"));
         let mut label = format!("{site}:{base}");
         let mut n = 2;
         while labels.contains(&label) {
@@ -177,9 +177,7 @@ pub(super) fn account_labels(site: &str, accounts: &[crate::config::Account]) ->
 /// the user must deselect either "All" or the rest before Enter works.
 pub(super) fn validate_kind_selection(picked: &[String]) -> Result<(), String> {
     if picked.len() > 1 && picked.iter().any(|l| l == "All") {
-        return Err(
-            "'All' can't be combined with specific types — deselect 'All' or the rest".to_string(),
-        );
+        return Err(crate::i18n::t("all_cant_combine_with_specifics"));
     }
     Ok(())
 }
@@ -204,22 +202,22 @@ pub(super) fn prompt_content_kinds(site: &str, label: &str) -> menu::Step<Vec<Co
         .into_iter()
         .map(|k| {
             let details = match k {
-                "All" => vec!["select all kinds".to_string()],
-                "Posts" => vec!["feed posts".to_string()],
-                "Reels" => vec!["short videos".to_string()],
-                "Highlights" => vec!["saved highlights".to_string()],
-                "Stories" => vec!["24h stories".to_string()],
-                "Profile" => vec!["avatar".to_string()],
-                "Videos" => vec!["videos".to_string()],
-                "Photos" => vec!["photos".to_string()],
-                "Media" => vec!["photos + videos".to_string()],
-                "Albums" => vec!["albums".to_string()],
+                "All" => vec![crate::i18n::t("content_hint_all")],
+                "Posts" => vec![crate::i18n::t("content_hint_posts")],
+                "Reels" => vec![crate::i18n::t("content_hint_reels")],
+                "Highlights" => vec![crate::i18n::t("content_hint_highlights")],
+                "Stories" => vec![crate::i18n::t("content_hint_stories")],
+                "Profile" => vec![crate::i18n::t("content_hint_profile")],
+                "Videos" => vec![crate::i18n::t("content_hint_videos")],
+                "Photos" => vec![crate::i18n::t("content_hint_photos")],
+                "Media" => vec![crate::i18n::t("content_hint_media")],
+                "Albums" => vec![crate::i18n::t("content_hint_albums")],
                 _ => Vec::new(),
             };
             (k.to_string(), details)
         })
         .collect();
-    let context = format!("Content for {label}");
+    let context = crate::i18n::tf("content_for_label", &[("label", label)]);
     // Esc steps back to the previous question instead of reading as
     // crate::i18n::t("nothing_selected"), which is what made a mis-typed username look like a
     // cancelled run.
@@ -386,7 +384,10 @@ mod tests {
         let no_name = vec![Account::default()];
         assert_eq!(
             account_labels("instagram", &no_name),
-            vec!["instagram:(no username)"]
+            vec![format!(
+                "instagram:{}",
+                crate::i18n::t("no_username_placeholder")
+            )]
         );
     }
 
