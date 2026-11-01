@@ -7,7 +7,7 @@ use crate::cli::interactive::browser::{Browser, Mode, Outcome};
 
 /// Outcome of one question in a multi-step flow.
 ///
-/// `Option` conflated "step back" with "leave": a caller that received `None`
+/// `Option` conflated crate::i18n::t("step_back") with crate::i18n::t("leave"): a caller that received `None`
 /// could not offer to go back, so Esc anywhere meant starting over. These
 /// three states are what a wizard actually needs — confirm, go back one step,
 /// or abandon.
@@ -50,19 +50,23 @@ impl<T> Step<T> {
 /// Hint line for a multi-select.
 ///
 /// Separate from [`key_hint`] because `Enter` does something different here:
-/// it picks the highlighted row unless rows are already checked, so "confirm"
+/// it picks the highlighted row unless rows are already checked, so crate::i18n::t("confirm")
 /// alone both hid the `Space` shortcut and described the wrong behaviour.
 fn multi_hint(back: bool) -> String {
-    let tail = if back { "esc back" } else { "esc cancel" };
-    format!("↑↓ move · ⏎ pick this one · space adds more · a all/none · {tail}")
+    let tail = if back {
+        crate::i18n::t("esc_back")
+    } else {
+        crate::i18n::t("esc_cancel")
+    };
+    crate::i18n::tf("multi_hint", &[("tail", &tail)])
 }
 
 /// Hint line describing the keys, shown in prompts that support going back.
 pub fn key_hint(back: bool) -> String {
     if back {
-        "↑↓ move · ⏎ confirm · esc back · ctrl+c cancel".to_string()
+        crate::i18n::tf("key_hint_back", &[("esc", &crate::i18n::t("esc_back"))])
     } else {
-        "⏎ confirm · esc cancel".to_string()
+        format!("⏎ confirm · {}", crate::i18n::t("esc_cancel"))
     }
 }
 
@@ -80,7 +84,7 @@ fn chrome_title(context: &str) -> String {
 }
 
 /// Single-select decorated menu (Browser Single). `context` is shown in the
-/// border title, e.g. "Download content" → `╭ SCRAPMF v1.7.0 ─ Download content ─╮`.
+/// border title, e.g. crate::i18n::t("download_content") → `╭ SCRAPMF v1.7.0 ─ Download content ─╮`.
 /// Returns the picked index, `Back` on Esc/q and `Cancel` on Ctrl+C.
 pub fn pick_single(context: &str, options: Vec<(String, Vec<String>)>) -> Step<usize> {
     pick_single_inner(context, Vec::new(), options, false, None)
@@ -261,7 +265,7 @@ fn draw_boxed(
 ///
 /// Enter always confirms and Esc always steps back, on both kinds of question.
 /// That is the flow the rest of the app already teaches: Enter proceeds, Esc
-/// retreats. A destructive prompt used to invert Enter to "no" on the theory
+/// retreats. A destructive prompt used to invert Enter to crate::i18n::t("no") on the theory
 /// that a stray keypress could delete a profile — but the box is modal, so the
 /// user had already chosen "Delete profile" from the menu before the prompt
 /// appeared, and the inversion only made the key that confirms every other
@@ -284,7 +288,7 @@ fn confirm_key(key: crossterm::event::KeyCode) -> Option<Step<bool>> {
 /// Ask a yes/no question inside the app's chrome.
 ///
 /// `Enter` confirms and `Esc` steps back, on every question. The `destructive`
-/// flag no longer changes the key mapping — it only adds "yes" to the hint so
+/// flag no longer changes the key mapping — it only adds crate::i18n::t("yes") to the hint so
 /// a prompt that removes something reads differently from one that adds.
 ///
 /// The prompt is modal: the caller reached it by already choosing the
@@ -307,11 +311,11 @@ pub fn confirm_box(
 
     let help = if destructive {
         // Enter confirms everywhere in this app, and Esc is the way back, so
-        // the hint says exactly that. Marking Enter as "no" here was the
+        // the hint says exactly that. Marking Enter as crate::i18n::t("no") here was the
         // opposite of what every other prompt does.
-        "⏎ yes · esc back"
+        &crate::i18n::t("hint_yes_esc_back")
     } else {
-        "⏎ yes · n no · esc back"
+        &crate::i18n::t("hint_yes_no_esc_back")
     };
 
     let mut boxed = match BoxedPrompt::enter(context) {
@@ -382,7 +386,7 @@ pub fn confirm_box(
 /// Lines are coloured by leading marker, matching the log panel: `✔` green,
 /// `✖` red, `ℹ`/`⚠` yellow. Anything else is plain.
 ///
-/// Returns `Back` on Esc, `Cancel` on Ctrl+C, so a caller can tell "dismissed"
+/// Returns `Back` on Esc, `Cancel` on Ctrl+C, so a caller can tell crate::i18n::t("dismissed")
 /// from "left".
 pub fn notice(context: &str, lines: &[String]) -> Step<()> {
     use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -420,7 +424,7 @@ pub fn notice(context: &str, lines: &[String]) -> Step<()> {
                 ratatui::text::Line::styled(line.clone(), style)
             })
             .collect();
-        if draw_boxed(title, terminal, body, "⏎ or esc dismiss").is_err() {
+        if draw_boxed(title, terminal, body, &crate::i18n::t("hint_dismiss")).is_err() {
             break;
         }
         if !crossterm::event::poll(std::time::Duration::from_millis(50)).unwrap_or(false) {
@@ -675,7 +679,7 @@ fn input_text_inner(
     }
     let trimmed = input.trim().to_string();
     if trimmed.is_empty() {
-        // An empty submission is not an answer; treat it as "step back" so the
+        // An empty submission is not an answer; treat it as crate::i18n::t("step_back") so the
         // user is not stranded on a screen with nothing typed.
         Step::Back
     } else {
@@ -718,8 +722,8 @@ mod tests {
 
     #[test]
     fn hint_advertises_back_only_when_supported() {
-        assert!(key_hint(true).contains("esc back"));
-        assert!(!key_hint(false).contains("back"));
+        assert!(key_hint(true).contains(&crate::i18n::t("esc_back")));
+        assert!(!key_hint(false).contains(&crate::i18n::t("esc_back")));
     }
 
     // ─── Yes/no confirmation ───────────────────────────────────────────────
@@ -769,7 +773,8 @@ mod tests {
         assert_eq!(
             Step::<u8>::Back.map(|n| n * 2),
             Step::Back,
-            "Back is not a value"
+            "{}",
+            crate::i18n::t("back_not_a_value")
         );
         assert_eq!(Step::<u8>::Cancel.map(|n| n * 2), Step::Cancel);
     }
@@ -777,7 +782,7 @@ mod tests {
     #[test]
     fn an_ordinary_question_can_still_be_declined() {
         // Enter answers yes in one keystroke, but a question whose answer is
-        // often "no" needs a way to say so that is not Esc — Esc means "step
+        // often crate::i18n::t("no") needs a way to say so that is not Esc — Esc means "step
         // back" everywhere else, and a caller that maps it to `false` is
         // leaning on a side effect rather than a designed answer.
         assert_eq!(confirm_key(KeyCode::Char('n')), Some(Step::Value(false)));
@@ -797,8 +802,8 @@ mod tests {
         let v = env!("CARGO_PKG_VERSION");
         assert_eq!(chrome_title(""), format!("SCRAPMF v{v}"));
         assert_eq!(
-            chrome_title("Download content"),
-            format!("SCRAPMF v{v} ─ Download content")
+            chrome_title(crate::i18n::t("download_content").as_str()),
+            format!("SCRAPMF v{v} ─ {}", crate::i18n::t("download_content"))
         );
         assert_eq!(
             chrome_title(&format!("SCRAPMF v{v}")),

@@ -18,16 +18,19 @@ pub(crate) enum Action {
     Exit,
 }
 
-const ENTRIES: &[(Action, &str)] = &[
-    (Action::Scrape, "Download content"),
-    (Action::Configuration, "Configuration"),
-    (Action::Plugins, "Plugins"),
-    (Action::Doctor, "Doctor"),
-    (Action::Exit, "Exit"),
-];
+fn entries() -> Vec<(Action, String)> {
+    vec![
+        (Action::Scrape, crate::i18n::t("download_content")),
+        (Action::Configuration, crate::i18n::t("configuration")),
+        (Action::Plugins, crate::i18n::t("plugins")),
+        (Action::Doctor, crate::i18n::t("doctor")),
+        (Action::Exit, crate::i18n::t("exit")),
+    ]
+}
 
 fn action_of(idx: usize) -> Action {
-    ENTRIES[idx.min(ENTRIES.len() - 1)].0
+    let e = entries();
+    e[idx.min(e.len() - 1)].0
 }
 
 /// Detail lines for the right pane. Live data where it is cheap.
@@ -36,9 +39,9 @@ fn detail_lines(action: Action) -> Vec<String> {
         Action::Scrape => {
             let sites = super::scrape_flow::site_options_with_fallbacks(&[]);
             let mut lines = vec![
-                "Run scrapes against accounts or URLs.".to_string(),
+                crate::i18n::t("run_scrapes").to_string(),
                 String::new(),
-                "Detected sites:".to_string(),
+                crate::i18n::t("detected_sites").to_string(),
             ];
             lines.extend(sites.iter().map(|s| format!("  · {s}")));
             lines
@@ -46,32 +49,40 @@ fn detail_lines(action: Action) -> Vec<String> {
         Action::Configuration => {
             let cfg = crate::config::load().unwrap_or_default();
             vec![
-                "Edit how scrapmf behaves.".to_string(),
+                crate::i18n::t("edit_how").to_string(),
                 String::new(),
-                format!(
-                    "output dir : {}",
-                    crate::config::expand_output_dir(&cfg.general.output_dir).display()
+                crate::i18n::t("output_dir_label").replace(
+                    "{}",
+                    &crate::config::expand_output_dir(&cfg.general.output_dir)
+                        .display()
+                        .to_string(),
                 ),
                 format!(
                     "archive    : {}",
-                    if cfg.general.archive { "on" } else { "off" }
+                    if cfg.general.archive {
+                        crate::i18n::t("on")
+                    } else {
+                        crate::i18n::t("off")
+                    }
                 ),
                 format!(
                     "plugins    : threads {}",
                     match crate::plugins::threads_state() {
                         crate::plugins::PluginState::Enabled(v) => format!("enabled ({v})"),
-                        crate::plugins::PluginState::Disabled => "disabled".to_string(),
-                        crate::plugins::PluginState::NotInstalled => "not installed".to_string(),
+                        crate::plugins::PluginState::Disabled =>
+                            crate::i18n::t("disabled").to_string(),
+                        crate::plugins::PluginState::NotInstalled =>
+                            crate::i18n::t("not_installed").to_string(),
                     }
                 ),
                 String::new(),
-                "Sites and profiles are managed inside.".to_string(),
+                crate::i18n::t("sites_profiles_managed").to_string(),
             ]
         }
         Action::Plugins => {
             let mut lines = vec![
-                "Optional site providers installed into scrapmf's".to_string(),
-                "own managed environment (never system Python).".to_string(),
+                crate::i18n::t("optional_site_providers").to_string(),
+                crate::i18n::t("own_managed_env").to_string(),
                 String::new(),
             ];
             for def in crate::plugins::REGISTRY {
@@ -79,31 +90,37 @@ fn detail_lines(action: Action) -> Vec<String> {
                     "threads" => match crate::plugins::threads_state() {
                         crate::plugins::PluginState::Enabled(v) => format!("enabled ({v})"),
                         crate::plugins::PluginState::Disabled => {
-                            "disabled (files kept)".to_string()
+                            crate::i18n::t("disabled_files_kept").to_string()
                         }
-                        crate::plugins::PluginState::NotInstalled => "not installed".to_string(),
+                        crate::plugins::PluginState::NotInstalled => {
+                            crate::i18n::t("not_installed").to_string()
+                        }
                     },
                     "termux-scan" => match crate::plugins::termux_scan_state() {
                         crate::plugins::PluginState::Enabled(v) => format!("enabled ({v})"),
-                        crate::plugins::PluginState::Disabled => "disabled".to_string(),
-                        crate::plugins::PluginState::NotInstalled => "not installed".to_string(),
+                        crate::plugins::PluginState::Disabled => {
+                            crate::i18n::t("disabled").to_string()
+                        }
+                        crate::plugins::PluginState::NotInstalled => {
+                            crate::i18n::t("not_installed").to_string()
+                        }
                     },
-                    _ => "not installed".to_string(),
+                    _ => crate::i18n::t("not_installed").to_string(),
                 };
                 lines.push(format!("  · {} by {}: {}", def.title, def.vendor, status));
             }
             lines
         }
         Action::Doctor => vec![
-            "Health check for backends and system:".to_string(),
+            crate::i18n::t("health_check").to_string(),
             String::new(),
-            "  · gallery-dl backend + pinned version".to_string(),
-            "  · plugin availability".to_string(),
-            "  · browser cookie DBs".to_string(),
-            "  · download archive stats".to_string(),
-            "  · temp dir writability".to_string(),
+            crate::i18n::t("doctor_detail_backend").to_string(),
+            crate::i18n::t("doctor_detail_plugins").to_string(),
+            crate::i18n::t("doctor_detail_browsers").to_string(),
+            crate::i18n::t("doctor_detail_archive").to_string(),
+            crate::i18n::t("doctor_detail_tempdir").to_string(),
         ],
-        Action::Exit => vec!["Leave scrapmf.".to_string()],
+        Action::Exit => vec![crate::i18n::t("leave_scrapmf").to_string()],
     }
 }
 
@@ -113,14 +130,8 @@ fn detail_lines(action: Action) -> Vec<String> {
 pub(crate) fn pick() -> Option<Action> {
     let title = format!("SCRAPMF v{}", env!("CARGO_PKG_VERSION"));
     let mut b = Browser::new(title).mode(Mode::Single);
-    for (_, label) in ENTRIES {
-        let action = action_of(
-            ENTRIES
-                .iter()
-                .position(|(_, l)| l == label)
-                .unwrap_or_default(),
-        );
-        b = b.entry(*label, detail_lines(action));
+    for (action, label) in entries() {
+        b = b.entry(label, detail_lines(action));
     }
     match b.run() {
         Outcome::Picked(i) => Some(action_of(i)),
@@ -135,9 +146,10 @@ mod tests {
 
     #[test]
     fn entries_are_stable_and_complete() {
-        assert_eq!(ENTRIES.len(), 5);
-        assert_eq!(ENTRIES[0].1, "Download content");
-        assert_eq!(ENTRIES.last().unwrap().1, "Exit");
+        let e = entries();
+        assert_eq!(e.len(), 5);
+        assert_eq!(e[0].1, crate::i18n::t("download_content"));
+        assert_eq!(e.last().unwrap().1, crate::i18n::t("exit"));
     }
 
     #[test]

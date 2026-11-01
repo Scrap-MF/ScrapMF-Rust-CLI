@@ -111,7 +111,7 @@ fn brand_account_label_inner(label: &str, colors: bool) -> String {
 }
 
 /// Option for site-selection menus: displays brand-colored when it is a
-/// network key, verbatim otherwise ("Create new site", "Back", …).
+/// network key, verbatim otherwise (crate::i18n::t("create_new_site"), crate::i18n::t("back"), …).
 #[derive(Clone)]
 pub struct SiteItem {
     pub key: String,
@@ -176,8 +176,8 @@ mod tests {
         assert!(branded.to_string().contains("\u{1b}["), "colored display");
         assert_eq!(branded.key(), "tiktok", "key must be clean for lookups");
 
-        let plain = SiteItem::new("Back");
-        assert_eq!(plain.to_string(), "Back");
-        assert_eq!(plain.key(), "Back");
+        let plain = SiteItem::new(crate::i18n::t("back"));
+        assert_eq!(plain.to_string(), crate::i18n::t("back"));
+        assert_eq!(plain.key(), crate::i18n::t("back"));
     }
 }

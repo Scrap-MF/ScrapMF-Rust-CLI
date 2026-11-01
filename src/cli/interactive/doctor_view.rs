@@ -17,7 +17,10 @@ pub(crate) fn show() {
     let guard = match TerminalGuard::enter() {
         Ok(g) => g,
         Err(e) => {
-            eprintln!("error: cannot enter TUI mode: {e}");
+            eprintln!(
+                "{}",
+                crate::i18n::t("tui_error").replace("{e}", &e.to_string())
+            );
             // Fallback: plain CLI output
             let _ = crate::commands::doctor::run(1);
             return;
@@ -65,7 +68,7 @@ pub(crate) fn show() {
             // keep them inside the single box for full-screen coverage.
             let mut all: Vec<Line> = Vec::new();
             all.push(Line::styled(
-                "scrapmf doctor — checking backends and system",
+                crate::i18n::t("doctor_title"),
                 Style::default().add_modifier(ratatui::style::Modifier::BOLD),
             ));
             all.push(Line::from("─────────────────────────────────────────────"));
@@ -75,10 +78,13 @@ pub(crate) fn show() {
             let block = Paragraph::new(all).block(
                 Block::bordered()
                     .border_set(ratatui::symbols::border::ROUNDED)
-                    .title(" Doctor "),
+                    .title(crate::i18n::t("doctor_view_title")),
             );
             f.render_widget(block, chunks[0]);
-            f.render_widget(Paragraph::new("Enter to go back · q/Esc Cancel"), chunks[1]);
+            f.render_widget(
+                Paragraph::new(crate::i18n::t("doctor_view_footer")),
+                chunks[1],
+            );
         });
 
         let has_event =

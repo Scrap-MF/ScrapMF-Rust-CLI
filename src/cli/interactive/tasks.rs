@@ -24,7 +24,7 @@ use crate::config::{self, Task, TaskAccount};
 ///
 /// `Option<T>` cannot carry both, and conflating them is what made Ctrl+C a
 /// dead key here: every helper returned `None` for "stepped back" *and* for
-/// "abandoned", so leaving without saving was the same gesture as going back.
+/// crate::i18n::t("abandoned"), so leaving without saving was the same gesture as going back.
 enum Answer<T> {
     Value(T),
     /// Esc — return to the previous question.
@@ -95,27 +95,33 @@ pub(super) fn tasks_menu() {
             entries.push((
                 theme::brand_site_label(name),
                 vec![
-                    format!("{} account(s) across {sites} site(s)", accounts),
+                    crate::i18n::tf(
+                        "accounts_across_sites",
+                        &[
+                            ("accounts", &accounts.to_string()),
+                            ("sites", &sites.to_string()),
+                        ],
+                    ),
                     describe_task(t),
                 ],
             ));
         }
         entries.push((
-            "Create new task".to_string(),
+            crate::i18n::t("create_new_task").to_string(),
             vec![
-                "Pick the content once, then reuse it.".to_string(),
+                crate::i18n::t("pick_content_once_reuse"),
                 String::new(),
-                "Each account gets its own content and".to_string(),
-                "cookie session.".to_string(),
+                crate::i18n::t("each_account_own_content"),
+                crate::i18n::t("cookie_session_dot"),
             ],
         ));
-        entries.push(("Back".to_string(), vec![String::new()]));
+        entries.push((crate::i18n::t("back").to_string(), vec![String::new()]));
 
         let create_idx = names.len();
         let back_idx = names.len() + 1;
         let context = match notice.take() {
-            Some(n) => format!("Tasks ─ {n}"),
-            None => "Tasks".to_string(),
+            Some(n) => crate::i18n::tf("tasks_with_notice", &[("notice", &n)]),
+            None => crate::i18n::t("tasks"),
         };
         let picked = match menu::pick_single(&context, entries) {
             Step::Value(i) => i,
@@ -142,24 +148,21 @@ fn task_menu(id: &str, task: &Task, cfg: &config::Config, notice: &mut Option<St
     let action = {
         let entries = vec![
             (
-                "Run".to_string(),
-                vec![
-                    String::new(),
-                    "Media lands under the task name.".to_string(),
-                ],
+                crate::i18n::t("run").to_string(),
+                vec![String::new(), crate::i18n::t("media_lands_under_task_name")],
             ),
             (
-                "Edit".to_string(),
+                crate::i18n::t("edit").to_string(),
                 vec![
-                    "Rewalk the wizard with today's accounts.".to_string(),
+                    crate::i18n::t("rewalk_wizard_today_accounts"),
                     String::new(),
                 ],
             ),
             (
-                "Delete".to_string(),
-                vec!["Removes the saved task.".to_string(), String::new()],
+                crate::i18n::t("delete").to_string(),
+                vec![crate::i18n::t("removes_saved_task"), String::new()],
             ),
-            ("Back".to_string(), vec![String::new()]),
+            (crate::i18n::t("back").to_string(), vec![String::new()]),
         ];
         let picked = menu::pick_single(&theme::brand_site_label(id), entries);
         match picked {
@@ -190,8 +193,8 @@ fn task_menu(id: &str, task: &Task, cfg: &config::Config, notice: &mut Option<St
             // yes on Enter, so pressing it here reads as "broken" rather than
             // as "no" — the hint line alone was not enough.
             let sure = menu::confirm_back(
-                "Tasks",
-                &format!("delete task '{id}'?  (y to confirm)"),
+                &crate::i18n::t("tasks"),
+                &crate::i18n::tf("delete_task_confirm", &[("id", id)]),
                 false,
                 true,
             )
@@ -201,11 +204,14 @@ fn task_menu(id: &str, task: &Task, cfg: &config::Config, notice: &mut Option<St
                 let path = dir.join(format!("{id}.toml"));
                 match std::fs::remove_file(&path) {
                     Ok(()) => {
-                        println!("✔ task '{id}' deleted");
-                        *notice = Some(format!("deleted '{id}'"));
+                        println!("{}", crate::i18n::tf("task_deleted", &[("id", id)]));
+                        *notice = Some(crate::i18n::tf("deleted_notice", &[("id", id)]));
                     }
                     Err(e) => {
-                        let why = format!("could not delete '{id}': {e}");
+                        let why = crate::i18n::tf(
+                            "could_not_delete",
+                            &[("id", id), ("e", &e.to_string())],
+                        );
                         report(&Created::Failed(why.clone()));
                         *notice = Some(why);
                     }
@@ -237,11 +243,11 @@ fn create_task(existing: Option<Task>) -> Created {
     let Some(site_opts) =
         Some(crate::cli::interactive::scrape_flow::site_options_with_fallbacks(&[]))
     else {
-        crate::output::print_error("no sites configured — add one under Configuration first");
+        crate::output::print_error(&crate::i18n::t("no_sites_configured"));
         return Created::Cancelled;
     };
     if site_opts.is_empty() {
-        crate::output::print_error("no sites configured — add one under Configuration first");
+        crate::output::print_error(&crate::i18n::t("no_sites_configured"));
         return Created::Cancelled;
     }
 
@@ -374,15 +380,18 @@ fn create_task(existing: Option<Task>) -> Created {
                 // to express, and Enter takes the highlighted row, which is
                 // save.
                 let choice = menu::pick_single(
-                    &format!("New task ─ {name}"),
+                    &crate::i18n::tf("new_task_title", &[("name", &name)]),
                     vec![
                         (
-                            format!("Save task '{name}'"),
-                            vec![format!("{} account(s) total", total(&accounts) + 1)],
+                            crate::i18n::tf("save_task_title", &[("name", &name)]),
+                            vec![crate::i18n::tf(
+                                "accounts_total",
+                                &[("count", &(total(&accounts) + 1).to_string())],
+                            )],
                         ),
                         (
-                            "Add another account".to_string(),
-                            vec!["Site, account and content again.".to_string()],
+                            crate::i18n::t("add_another_account").to_string(),
+                            vec![crate::i18n::t("site_account_content_again")],
                         ),
                     ],
                 );
@@ -441,16 +450,16 @@ fn finish(
     editing: bool,
 ) -> Created {
     if accounts.is_empty() {
-        println!("— no accounts, nothing saved");
+        println!("{}", crate::i18n::t("no_accounts_nothing_saved"));
         return Created::Cancelled;
     }
     let Some(dir) = config::tasks_dir() else {
-        crate::output::print_error("could not locate the tasks directory");
+        crate::output::print_error(&crate::i18n::t("tasks_dir_not_found"));
         return Created::Cancelled;
     };
     let path = dir.join(format!("{name}.toml"));
     if !editing && path.exists() {
-        crate::output::print_error(&format!("task '{name}' already exists"));
+        crate::output::print_error(&crate::i18n::tf("task_already_exists", &[("name", name)]));
         return Created::Cancelled;
     }
     let task = Task {
@@ -460,15 +469,18 @@ fn finish(
     };
     match config::write_task_file(&path, &task) {
         Ok(()) => Created::Saved(name.to_string()),
-        Err(e) => Created::Failed(format!("could not save '{name}': {e}")),
+        Err(e) => Created::Failed(crate::i18n::tf(
+            "could_not_save_task",
+            &[("name", name), ("e", &e.to_string())],
+        )),
     }
 }
 
 /// The one-line version of a wizard outcome, for the menu footer.
 fn notice_from(outcome: &Created) -> Option<String> {
     match outcome {
-        Created::Saved(name) => Some(format!("saved '{name}'")),
-        Created::Cancelled => Some("cancelled".to_string()),
+        Created::Saved(name) => Some(crate::i18n::tf("saved_task", &[("name", name)])),
+        Created::Cancelled => Some(crate::i18n::t("canceled").to_string()),
         // A failure already got the loud treatment; repeating it on the
         // footer would only be noise.
         Created::Failed(_) => None,
@@ -482,13 +494,13 @@ fn notice_from(outcome: &Created) -> Option<String> {
 /// between prompts is.
 fn report(outcome: &Created) {
     let line = match outcome {
-        Created::Saved(name) => format!("✔ task '{name}' saved"),
-        Created::Cancelled => "— cancelled, nothing saved".to_string(),
+        Created::Saved(name) => crate::i18n::tf("task_saved", &[("name", name)]),
+        Created::Cancelled => crate::i18n::t("cancelled_nothing_saved"),
         Created::Failed(why) => format!("⚠ {why}"),
     };
     println!("{line}");
     if matches!(outcome, Created::Failed(_)) {
-        let _ = inquire::Text::new("press Enter to continue")
+        let _ = inquire::Text::new(&crate::i18n::t("press_enter_to_continue"))
             .with_render_config(theme::render_config())
             .prompt();
     }
@@ -497,10 +509,10 @@ fn report(outcome: &Created) {
 fn ask_task_name() -> Answer<String> {
     loop {
         let raw = menu::input_text_back(
-            "New task",
-            "Task name (becomes the output folder):",
+            &crate::i18n::t("new_task"),
+            &crate::i18n::t("task_name_becomes_output_folder"),
             "school_stories",
-            "letters, digits, - and _",
+            &crate::i18n::t("letters_digits_dash_underscore"),
             "",
         );
         let name = match raw {
@@ -510,12 +522,12 @@ fn ask_task_name() -> Answer<String> {
         };
         let name = name.trim().to_string();
         if name.is_empty() {
-            println!("⚠ the task needs a name");
+            println!("{}", crate::i18n::t("task_needs_name"));
             continue;
         }
         // Same rules as profile ids: the name becomes a folder name.
         if name.contains('/') || name.contains('.') || name.contains('\\') {
-            println!("⚠ no / . or \\ in a task name — it becomes a folder");
+            println!("{}", crate::i18n::t("no_slash_dot_backslash_task_name"));
             continue;
         }
         return Answer::Value(name);
@@ -529,18 +541,25 @@ fn ask_site(task: &str, site_opts: &[String], previous: Option<&str>) -> Answer<
             let details = crate::sites::registry::find_by_id(s)
                 .map(|sp| {
                     vec![
-                        format!("kinds: {}", sp.content_kinds.join(", ")),
-                        format!("backend: {:?}", sp.backend),
+                        crate::i18n::tf("kinds_colon", &[("kinds", &sp.content_kinds.join(", "))]),
+                        crate::i18n::tf(
+                            "backend_colon",
+                            &[("backend", &format!("{:?}", sp.backend))],
+                        ),
                     ]
                 })
-                .unwrap_or_else(|| vec!["custom site (sites/*.toml)".to_string()]);
+                .unwrap_or_else(|| vec![crate::i18n::t("custom_site_sites_toml")]);
             (theme::brand_site_label(s), details)
         })
         .collect();
     let initial = previous
         .and_then(|p| site_opts.iter().position(|s| s == p))
         .unwrap_or(0);
-    let picked = menu::pick_single_back_at(&format!("Task '{task}' ─ site"), site_list, initial);
+    let picked = menu::pick_single_back_at(
+        &crate::i18n::tf("task_site_title", &[("task", task)]),
+        site_list,
+        initial,
+    );
     match picked {
         Step::Value(i) => match site_opts.get(i) {
             Some(s) => Answer::Value(s.clone()),
@@ -554,10 +573,10 @@ fn ask_site(task: &str, site_opts: &[String], previous: Option<&str>) -> Answer<
 fn ask_username(site: &str, previous: Option<&str>) -> Answer<String> {
     loop {
         let raw = menu::input_text_back(
-            &format!("Task ─ {site}"),
-            "Username:",
+            &crate::i18n::tf("task_site_title2", &[("site", site)]),
+            &crate::i18n::t("username"),
             "someone",
-            "no @ needed",
+            &crate::i18n::t("no_at_needed"),
             previous.unwrap_or(""),
         );
         let value = match raw {
@@ -567,7 +586,7 @@ fn ask_username(site: &str, previous: Option<&str>) -> Answer<String> {
         };
         let value = value.trim().trim_start_matches('@').trim().to_string();
         if value.is_empty() {
-            println!("⚠ enter a username");
+            println!("{}", crate::i18n::t("enter_a_username"));
             continue;
         }
         return Answer::Value(value);
@@ -591,21 +610,27 @@ fn pick_cookie_for(site: &str) -> Answer<Option<String>> {
 
     let mut entries: Vec<(String, Vec<String>)> = Vec::new();
     entries.push((
-        "Site default".to_string(),
-        vec!["whatever sites/*.toml configures".to_string()],
+        crate::i18n::t("site_default").to_string(),
+        vec![crate::i18n::t("whatever_sites_toml_configures")],
     ));
     for (matches, name) in &ranked {
         let summary = cookies::profile_summary(name).unwrap_or_default();
         entries.push((
-            format!("{name}  — {summary}"),
+            crate::i18n::tf(
+                "profile_summary_line",
+                &[("name", name), ("summary", &summary)],
+            ),
             vec![if *matches {
-                format!("has cookies for {site}")
+                crate::i18n::tf("has_cookies_for_site", &[("site", site)])
             } else {
-                format!("⚠ no cookies for {site}")
+                crate::i18n::tf("no_cookies_for_site", &[("site", site)])
             }],
         ));
     }
-    match menu::pick_single_back(&format!("Cookies for {site}"), entries) {
+    match menu::pick_single_back(
+        &crate::i18n::tf("cookies_for_site", &[("site", site)]),
+        entries,
+    ) {
         // Index 0 is the site default, an explicit answer rather than a skip.
         Step::Value(0) => Answer::Value(None),
         Step::Value(i) => Answer::Value(ranked.get(i - 1).map(|(_, name)| name.clone())),
@@ -650,7 +675,7 @@ fn ask_kinds(site: &str, previous: &[String]) -> Answer<Vec<String>> {
         .filter_map(|i| options.get(i).map(|o| o.to_string()))
         .collect();
     if picked.is_empty() {
-        println!("⚠ pick at least one kind");
+        println!("{}", crate::i18n::t("pick_at_least_one_kind"));
         return ask_kinds(site, previous);
     }
     Answer::Value(picked)
@@ -689,7 +714,10 @@ fn run_task(task: &Task, cfg: &config::Config) -> Step<()> {
                 .map(str::trim)
                 .filter(|u| !u.is_empty())
             else {
-                println!("⚠ {site}: account without a username — skipped");
+                println!(
+                    "{}",
+                    crate::i18n::tf("account_without_username_skipped", &[("site", site)])
+                );
                 continue;
             };
             let requested: HashSet<String> = ta.kinds.iter().cloned().collect();
@@ -698,8 +726,15 @@ fn run_task(task: &Task, cfg: &config::Config) -> Step<()> {
                 // Name the account and the reason: a silent skip reads as
                 // "the task has nothing to fetch".
                 println!(
-                    "⚠ {site}:{username} — {} has no content this site can fetch — skipped",
-                    describe_kinds(&ta.kinds)
+                    "{}",
+                    crate::i18n::tf(
+                        "no_content_site_can_fetch",
+                        &[
+                            ("site", site),
+                            ("username", username),
+                            ("kinds", &describe_kinds(&ta.kinds)),
+                        ]
+                    )
                 );
                 continue;
             }
@@ -756,13 +791,22 @@ fn run_task(task: &Task, cfg: &config::Config) -> Step<()> {
                         }
                     }
                 }
-                Err(reason) => println!("⚠ {site}:{username} — {reason}"),
+                Err(reason) => println!(
+                    "{}",
+                    crate::i18n::tf(
+                        "site_username_reason",
+                        &[("site", site), ("username", username), ("reason", &reason)]
+                    )
+                ),
             }
         }
     }
 
     if jobs.is_empty() {
-        println!("ℹ nothing to download for '{task_id}'");
+        println!(
+            "{}",
+            crate::i18n::tf("nothing_to_download_for", &[("task", &task_id)])
+        );
         return Step::Value(());
     }
 
@@ -796,21 +840,24 @@ fn prompt_cookie_override(sites: &[String]) -> Option<PathBuf> {
     let ranked = rank_cookie_profiles(stored, sites);
 
     let mut entries: Vec<(String, Vec<String>)> = vec![(
-        "Site default".to_string(),
-        vec!["whatever sites/*.toml configures".to_string()],
+        crate::i18n::t("site_default").to_string(),
+        vec![crate::i18n::t("whatever_sites_toml_configures")],
     )];
     for (matches, name) in &ranked {
         let summary = cookies::profile_summary(name).unwrap_or_default();
         entries.push((
-            format!("{name}  — {summary}"),
+            crate::i18n::tf(
+                "profile_summary_line",
+                &[("name", name), ("summary", &summary)],
+            ),
             vec![if *matches {
-                "has cookies for these sites".to_string()
+                crate::i18n::t("has_cookies_for_these_sites")
             } else {
-                "⚠ no cookies for these sites".to_string()
+                crate::i18n::t("no_cookies_for_these_sites")
             }],
         ));
     }
-    match menu::pick_single_back("Cookies for this run?", entries) {
+    match menu::pick_single_back(&crate::i18n::t("cookies_for_this_run"), entries) {
         Step::Value(0) | Step::Back => None,
         Step::Value(i) => ranked
             .get(i - 1)
@@ -881,7 +928,7 @@ fn kinds_for_site(
 
 fn describe_kinds(labels: &[String]) -> String {
     if labels.is_empty() {
-        "no content".to_string()
+        crate::i18n::t("no_content")
     } else {
         labels.join(", ")
     }
@@ -906,7 +953,7 @@ fn describe_task(task: &Task) -> String {
 
 fn describe_kinds_owned(labels: &[&String]) -> String {
     if labels.is_empty() {
-        "no content".to_string()
+        crate::i18n::t("no_content")
     } else {
         labels
             .iter()
@@ -1161,16 +1208,16 @@ mod tests {
     fn back_and_abort_stay_distinct_answers() {
         // Collapsing these is what made Ctrl+C a dead key: it used to return
         // the same `None` as Esc, so leaving without saving was impossible.
-        fn shape(a: Answer<String>) -> &'static str {
+        fn shape(a: Answer<String>) -> String {
             match a {
-                Answer::Value(_) => "value",
-                Answer::Back => "back",
-                Answer::Abort => "abort",
+                Answer::Value(_) => "value".to_string(),
+                Answer::Back => "back".to_string(),
+                Answer::Abort => crate::i18n::t("abort"),
             }
         }
         assert_eq!(shape(Answer::Value("x".into())), "value");
         assert_eq!(shape(Answer::Back), "back");
-        assert_eq!(shape(Answer::Abort), "abort");
+        assert_eq!(shape(Answer::Abort), crate::i18n::t("abort"));
     }
 
     #[test]

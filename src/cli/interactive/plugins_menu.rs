@@ -1,4 +1,4 @@
-//! "Plugins" top-level submenu — pick a plugin, then manage it
+//! crate::i18n::t("plugins") top-level submenu — pick a plugin, then manage it
 //! (update/disable/remove). Thin UI over [`crate::plugins`] logic, rendered
 //! from the plugin registry so future plugins slot in without new menus.
 
@@ -13,12 +13,13 @@ pub(super) fn menu() {
             .iter()
             .map(|p| format!("{}  ·  {}", plugin_line(p), status_short(p.id)))
             .collect();
-        options.push("Back".to_string());
-        let choice = match select_menu("Plugins:", options).prompt() {
+        options.push(crate::i18n::t("back").to_string());
+        let choice = match select_menu(&format!("{}:", crate::i18n::t("plugins")), options).prompt()
+        {
             Ok(c) => c,
             Err(_) => return,
         };
-        if choice == "Back" {
+        if choice == crate::i18n::t("back") {
             return;
         }
         // Match back by title (labels are stable registry data).
@@ -29,7 +30,7 @@ pub(super) fn menu() {
 }
 
 fn plugin_submenu(def: &PluginDef) {
-    if def.id == "termux-scan" {
+    if def.id == crate::i18n::t("termux_scan") {
         termux_scan_submenu(def);
         return;
     }
@@ -37,52 +38,80 @@ fn plugin_submenu(def: &PluginDef) {
     loop {
         clear_screen();
         let status = match &state {
-            PluginState::NotInstalled => "not installed".to_string(),
-            PluginState::Disabled => "disabled (files kept)".to_string(),
-            PluginState::Enabled(v) => format!("enabled ({v})"),
+            PluginState::NotInstalled => crate::i18n::t("not_installed"),
+            PluginState::Disabled => crate::i18n::t("disabled_files_kept"),
+            PluginState::Enabled(v) => crate::i18n::tf("enabled_paren", &[("v", v)]),
         };
-        println!("── {} by {} ──", def.title, def.vendor);
+        println!(
+            "{}",
+            crate::i18n::tf(
+                "plugin_header",
+                &[("title", def.title), ("vendor", def.vendor)]
+            )
+        );
         println!("   {status}");
         println!();
 
         let mut options: Vec<String> = Vec::new();
         match state {
-            PluginState::NotInstalled => options.push(format!(
-                "Enable — install at pin {THREADSTRACTOR_PIN} (~150MB Chromium download)"
+            PluginState::NotInstalled => options.push(crate::i18n::tf(
+                "enable_install_pin",
+                &[("pin", THREADSTRACTOR_PIN)],
             )),
             PluginState::Disabled => {
-                options.push("Enable".to_string());
-                options.push("Remove (deletes all files)".to_string());
+                options.push(crate::i18n::t("enable").to_string());
+                options.push(crate::i18n::t("remove_deletes_all_files").to_string());
             }
             PluginState::Enabled(_) => {
-                options.push(format!("Update / reinstall at pin {THREADSTRACTOR_PIN}"));
-                options.push("Disable (hide, keep files)".to_string());
-                options.push("Remove (deletes all files)".to_string());
+                options.push(crate::i18n::tf(
+                    "update_reinstall_pin",
+                    &[("pin", THREADSTRACTOR_PIN)],
+                ));
+                options.push(crate::i18n::t("disable_hide_keep_files").to_string());
+                options.push(crate::i18n::t("remove_deletes_all_files").to_string());
             }
         }
         options.push("Back".to_string());
 
-        let choice = match select_menu("Action:", options).prompt() {
+        let choice = match select_menu(&crate::i18n::t("action_prompt"), options).prompt() {
             Ok(c) => c,
             Err(_) => return,
         };
         match choice.as_str() {
-            "Back" => return,
-            c if c.starts_with("Enable") || c.starts_with("Update / reinstall") => {
+            s if s == crate::i18n::t("back") => return,
+            c if c.starts_with(&crate::i18n::t("enable"))
+                || c.starts_with(&crate::i18n::t("update_reinstall_pin")) =>
+            {
                 if let Err(e) = plugins::install() {
-                    eprintln!("✖ install failed: {e}");
+                    eprintln!(
+                        "{}",
+                        crate::i18n::tf("install_failed_x", &[("e", &e.to_string())])
+                    );
                 } else if matches!(state, PluginState::NotInstalled | PluginState::Disabled) {
-                    println!("✔ {} by {} enabled", def.title, def.vendor);
+                    println!(
+                        "{}",
+                        crate::i18n::tf(
+                            "plugin_enabled_by",
+                            &[("title", def.title), ("vendor", def.vendor)]
+                        )
+                    );
                 }
                 pause();
             }
-            "Disable (hide, keep files)" => match plugins::set_disabled(true) {
-                Ok(()) => println!("✔ disabled — options hidden, files kept"),
-                Err(e) => eprintln!("✖ failed: {e}"),
-            },
-            "Remove (deletes all files)" => match plugins::remove() {
-                Ok(()) => println!("✔ removed completely"),
-                Err(e) => eprintln!("✖ remove failed: {e}"),
+            s if s == crate::i18n::t("disable_hide_keep_files") => {
+                match plugins::set_disabled(true) {
+                    Ok(()) => println!("{}", crate::i18n::t("disabled_options_hidden_files_kept")),
+                    Err(e) => {
+                        eprintln!("{}", crate::i18n::tf("failed_x", &[("e", &e.to_string())]))
+                    }
+                }
+            }
+            s if s == crate::i18n::t("remove_deletes_all_files") => match plugins::remove() {
+                Ok(()) => println!("{}", crate::i18n::t("removed_completely")),
+                Err(e) => eprintln!(
+                    "{}",
+                    crate::i18n::tf("remove_failed_x", &[("e", &e.to_string())])
+                ),
             },
             _ => {}
         }
@@ -94,29 +123,37 @@ fn termux_scan_submenu(def: &PluginDef) {
         clear_screen();
         let state = crate::plugins::termux_scan_state();
         let status = match &state {
-            PluginState::NotInstalled => "not installed (termux-media-scan not found)".to_string(),
-            PluginState::Disabled => "disabled (opt-in, enable to scan gallery)".to_string(),
-            PluginState::Enabled(v) => format!("enabled ({v})"),
+            PluginState::NotInstalled => {
+                crate::i18n::t("not_installed_termux_media_scan_not_found")
+            }
+            PluginState::Disabled => crate::i18n::t("disabled_opt_in_enable_scan_gallery"),
+            PluginState::Enabled(v) => crate::i18n::tf("enabled_paren", &[("v", v)]),
         };
-        println!("── {} by {} ──", def.title, def.vendor);
+        println!(
+            "{}",
+            crate::i18n::tf(
+                "plugin_header",
+                &[("title", def.title), ("vendor", def.vendor)]
+            )
+        );
         println!("   {status}");
-        println!("   Runs termux-media-scan <output dir> once per finished download");
-        println!("   Requires termux:api app + pkg install termux-api (Termux only)");
+        println!("{}", crate::i18n::t("runs_termux_media_scan_output_dir"));
+        println!("{}", crate::i18n::t("requires_termux_api"));
         println!();
 
         let mut options: Vec<String> = Vec::new();
         match state {
             PluginState::NotInstalled => {
-                options.push("Enable (requires termux-media-scan on PATH)".to_string());
-                options.push("Help — how to install termux-api".to_string());
+                options.push(crate::i18n::t("enable_requires_termux_media_scan_path").to_string());
+                options.push(crate::i18n::t("help_install_termux_api").to_string());
             }
             PluginState::Disabled => {
-                options.push("Enable".to_string());
-                options.push("Help — how to install termux-api".to_string());
+                options.push(crate::i18n::t("enable").to_string());
+                options.push(crate::i18n::t("help_install_termux_api").to_string());
             }
             PluginState::Enabled(_) => {
-                options.push("Disable".to_string());
-                options.push("Test scan now (uses configured output dir)".to_string());
+                options.push(crate::i18n::t("disable").to_string());
+                options.push(crate::i18n::t("test_scan_now").to_string());
             }
         }
         options.push("Back".to_string());
@@ -126,35 +163,47 @@ fn termux_scan_submenu(def: &PluginDef) {
             Err(_) => return,
         };
         match choice.as_str() {
-            "Back" => return,
-            c if c.starts_with("Enable") => match crate::plugins::set_termux_scan_disabled(false) {
-                Ok(()) => {
-                    if matches!(crate::plugins::termux_scan_state(), PluginState::Enabled(_)) {
-                        println!("✔ Termux MediaScan enabled");
-                    } else {
-                        println!(
-                            "✔ enabled but termux-media-scan not found — install termux:api app + pkg install termux-api, then test"
-                        );
+            s if s == crate::i18n::t("back") => return,
+            c if c.starts_with(&crate::i18n::t("enable")) => {
+                match crate::plugins::set_termux_scan_disabled(false) {
+                    Ok(()) => {
+                        if matches!(crate::plugins::termux_scan_state(), PluginState::Enabled(_)) {
+                            println!("{}", crate::i18n::t("termux_mediascan_enabled"));
+                        } else {
+                            println!(
+                                "{}",
+                                crate::i18n::t("enabled_but_termux_media_scan_not_found")
+                            );
+                        }
+                        pause();
+                        return;
                     }
-                    pause();
-                    return;
+                    Err(e) => {
+                        eprintln!("{}", crate::i18n::tf("failed_x", &[("e", &e.to_string())]))
+                    }
                 }
-                Err(e) => eprintln!("✖ failed: {e}"),
-            },
-            "Disable" => match crate::plugins::set_termux_scan_disabled(true) {
-                Ok(()) => {
-                    println!("✔ disabled");
-                    pause();
-                    return;
+            }
+            s if s == crate::i18n::t("disable") => {
+                match crate::plugins::set_termux_scan_disabled(true) {
+                    Ok(()) => {
+                        println!("{}", crate::i18n::t("disabled_simple"));
+                        pause();
+                        return;
+                    }
+                    Err(e) => {
+                        eprintln!("{}", crate::i18n::tf("failed_x", &[("e", &e.to_string())]))
+                    }
                 }
-                Err(e) => eprintln!("✖ failed: {e}"),
-            },
-            c if c.starts_with("Test scan") => {
+            }
+            c if c.starts_with(&crate::i18n::t("test_scan_now")) => {
                 // Scan the configured output dir — never a hardcoded fallback.
                 let dir = match crate::config::load() {
                     Ok(c) => crate::config::expand_output_dir(&c.general.output_dir),
                     Err(e) => {
-                        eprintln!("✖ cannot read config: {e}");
+                        eprintln!(
+                            "{}",
+                            crate::i18n::tf("cannot_read_config_x", &[("e", &e.to_string())])
+                        );
                         pause();
                         continue;
                     }
@@ -164,21 +213,24 @@ fn termux_scan_submenu(def: &PluginDef) {
                 // disabled is deliberately silent there.
                 match crate::application::media_scan::maybe_scan(&dir, None) {
                     crate::application::media_scan::ScanOutcome::Disabled => {
-                        println!("✖ Termux MediaScan is disabled — enable it first");
+                        println!(
+                            "{}",
+                            crate::i18n::t("termux_mediascan_disabled_enable_first")
+                        );
                     }
                     crate::application::media_scan::ScanOutcome::Done => {
-                        println!("✔ check Android Gallery");
+                        println!("{}", crate::i18n::t("check_android_gallery"));
                     }
                     _ => {}
                 }
                 pause();
             }
-            c if c.starts_with("Help") => {
-                println!("  Install on Termux:");
-                println!("    1. Install Termux:API app from F-Droid");
-                println!("    2. pkg install termux-api");
-                println!("    3. termux-media-scan --help  (should print usage)");
-                println!("    4. Enable this plugin, then next download will auto-scan");
+            c if c.starts_with(&crate::i18n::t("help")) => {
+                println!("{}", crate::i18n::t("install_on_termux"));
+                println!("{}", crate::i18n::t("termux_help_step1"));
+                println!("{}", crate::i18n::t("termux_help_step2"));
+                println!("{}", crate::i18n::t("termux_help_step3"));
+                println!("{}", crate::i18n::t("termux_help_step4"));
                 pause();
             }
             _ => {}
@@ -200,9 +252,9 @@ fn state_for(def: &PluginDef) -> PluginState {
 /// Short status for the plugin list line.
 fn status_short(id: &str) -> String {
     match state_for_id(id) {
-        PluginState::NotInstalled => "not installed".to_string(),
-        PluginState::Disabled => "disabled".to_string(),
-        PluginState::Enabled(v) => format!("enabled {v}"),
+        PluginState::NotInstalled => crate::i18n::t("not_installed"),
+        PluginState::Disabled => crate::i18n::t("disabled"),
+        PluginState::Enabled(v) => crate::i18n::tf("enabled_value", &[("v", &v)]),
     }
 }
 

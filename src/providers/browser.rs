@@ -48,13 +48,15 @@ pub fn detect_available_browsers() -> Vec<BrowserInfo> {
                         .unwrap_or_default(),
                     cookie_db_summary(&db.path)
                 ),
-                Some(db) => format!(
-                    "{} — {} ({}, not installed)",
-                    ch.display,
-                    cookie_db_summary(&db.path),
-                    db.origin
+                Some(db) => crate::i18n::tf(
+                    "browser_not_installed",
+                    &[
+                        ("display", ch.display),
+                        ("summary", &cookie_db_summary(&db.path)),
+                        ("origin", db.origin),
+                    ],
                 ),
-                None => format!("{} — no cookie DB", ch.display),
+                None => crate::i18n::tf("browser_no_cookie_db", &[("display", ch.display)]),
             };
             BrowserInfo {
                 id: ch.id,
@@ -73,9 +75,9 @@ fn cookie_db_summary(db: &std::path::Path) -> String {
     match std::fs::metadata(db) {
         Ok(md) if md.len() > 0 => {
             let kb = md.len() / 1024;
-            format!("cookie DB ({kb} KB)")
+            crate::i18n::tf("browser_cookie_db_kb", &[("kb", &kb.to_string())])
         }
-        _ => "empty cookie DB".to_string(),
+        _ => crate::i18n::t("browser_empty_cookie_db"),
     }
 }
 

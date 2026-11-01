@@ -419,14 +419,17 @@ pub(super) fn jobs_for_account(c: &AccountCtx) -> Result<Vec<ScrapeJob>, String>
 /// question of a flow, and backing out of it used to abandon the whole run.
 pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config) -> Step<()> {
     if requests.is_empty() {
-        println!("ℹ No content selected");
+        println!("{}", crate::i18n::t("no_content_selected"));
         return Step::Value(());
     }
     // The summary and the decision share one box, so the confirmation looks
     // like the rest of the app instead of dropping out of it. Without a TTY the
     // plain lines are kept, which is what scripts and CI rely on.
     let tty = std::io::IsTerminal::is_terminal(&std::io::stdout());
-    let mut summary: Vec<String> = vec![format!("✔ Ready — {} job(s):", requests.len())];
+    let mut summary: Vec<String> = vec![crate::i18n::tf(
+        "ready_jobs",
+        &[("count", &requests.len().to_string())],
+    )];
     for (i, (req, site, username, kinds_desc)) in requests.iter().enumerate() {
         let out = req
             .output
@@ -443,8 +446,8 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
     let proceed = if tty {
         // Enter is the fast path: the expected action is to continue.
         match crate::cli::interactive::menu::confirm_box(
-            "Download content",
-            "Proceed?",
+            &crate::i18n::t("download_content"),
+            &crate::i18n::t("proceed"),
             &summary,
             true,
             false,
@@ -458,14 +461,14 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
         for line in &summary {
             println!("{line}");
         }
-        Confirm::new("Proceed?")
+        Confirm::new(&crate::i18n::t("proceed"))
             .with_render_config(super::theme::render_config())
             .with_default(false)
             .prompt()
             .unwrap_or(false)
     };
     if !proceed {
-        println!("canceled");
+        println!("{}", crate::i18n::t("canceled"));
         return Step::Value(());
     }
 
@@ -487,7 +490,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                     &crate::providers::threadstractor::Threadstractor,
                 )
             {
-                let msg = "threads plugin is not enabled — enable it in scrapmf → Plugins (installs threadstractormf)".to_string();
+                let msg = crate::i18n::t("threads_plugin_not_enabled_scrape");
                 if !missing.contains(&msg) {
                     missing.push(msg);
                 }
@@ -496,7 +499,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                     &crate::providers::gallery_dl::GalleryDl,
                 )
             {
-                let msg = "gallery-dl not found — run `scrapmf setup`".to_string();
+                let msg = crate::i18n::t("gallery_dl_not_found_setup");
                 if !missing.contains(&msg) {
                     missing.push(msg);
                 }
@@ -616,7 +619,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                     match &result {
                         Ok(_) => st.finish_ok(i),
                         Err(e) => {
-                            if e.to_string().contains("aborted by user") {
+                            if e.to_string().contains(&crate::i18n::t("aborted_by_user")) {
                                 st.cancel_from(i);
                                 was_cancelled = true;
                                 failed = true;
@@ -678,7 +681,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
         });
 
         if was_cancelled {
-            println!("⚠ canceled");
+            println!("{}", crate::i18n::t("canceled_warning"));
         }
         for rep in &job_reports {
             for (stderr, line) in rep {
@@ -733,7 +736,7 @@ pub(super) fn integrity_report_lines(
 ) -> Vec<(bool, String)> {
     if issues.is_empty() {
         if checked > 0 {
-            tracing::debug!(checked, "integrity check: all files OK");
+            tracing::debug!(checked, "{}", crate::i18n::t("integrity_ok"));
         }
         return Vec::new();
     }
@@ -741,29 +744,24 @@ pub(super) fn integrity_report_lines(
     let mut out = Vec::new();
 
     if !delete.is_empty() {
-        out.push((true, format!("{} file(s) look incomplete:", delete.len())));
+        out.push((
+            true,
+            crate::i18n::tf("files_look_incomplete", &[("n", &delete.len().to_string())]),
+        ));
         for (path, issue) in &delete {
             out.push((
                 true,
                 format!("    - {} ({})", path.display(), issue.description()),
             ));
         }
-        out.push((
-            true,
-            "    ↳ delete the file(s) above and re-run — deterministic filenames \
-             re-download only what is missing"
-                .to_string(),
-        ));
+        out.push((true, crate::i18n::t("delete_files_rerun_advice")));
     }
 
     if !leave.is_empty() {
         // Not a failure: these downloaded correctly.
         out.push((
             false,
-            format!(
-                "{} file(s) downloaded fine but use H.265/HEVC:",
-                leave.len()
-            ),
+            crate::i18n::tf("files_downloaded_hevc", &[("n", &leave.len().to_string())]),
         ));
         for (path, issue) in &leave {
             out.push((
@@ -771,18 +769,16 @@ pub(super) fn integrity_report_lines(
                 format!("    - {} ({})", path.display(), issue.description()),
             ));
         }
-        out.push((
-            false,
-            "    ↳ complete downloads — leave them. Play them with VLC, or convert with \
-             ffmpeg -i <file> -c:v libx264 -crf 20 <out>"
-                .to_string(),
-        ));
+        out.push((false, crate::i18n::t("complete_downloads_leave_vlc_ffmpeg")));
     }
 
     if !unknown.is_empty() {
         out.push((
             true,
-            format!("{} file(s) could not be read:", unknown.len()),
+            crate::i18n::tf(
+                "files_could_not_be_read",
+                &[("n", &unknown.len().to_string())],
+            ),
         ));
         for (path, issue) in &unknown {
             out.push((
@@ -790,12 +786,7 @@ pub(super) fn integrity_report_lines(
                 format!("    - {} ({})", path.display(), issue.description()),
             ));
         }
-        out.push((
-            true,
-            "    ↳ completeness is unknown — check permissions and free disk space, \
-             then re-run"
-                .to_string(),
-        ));
+        out.push((true, crate::i18n::t("completeness_unknown_advice")));
     }
     out
 }
@@ -1053,7 +1044,7 @@ pub(super) fn prompt_scrape_direct_urls() {
     'urls: loop {
         let (urls, _errors) = loop {
             let raw = match crate::cli::interactive::menu::input_text_back(
-                "Download content ─ URL(s)",
+                &crate::i18n::t("download_content_urls"),
                 "Paste URL(s) — separate with spaces or commas:",
                 "https://www.tiktok.com/@user/video/123 https://www.instagram.com/reel/xyz/",
                 "each URL is matched against your sites/*.toml patterns",
@@ -1062,7 +1053,7 @@ pub(super) fn prompt_scrape_direct_urls() {
                 Step::Value(v) => v,
                 // First question of this flow: Esc leaves.
                 Step::Back | Step::Cancel => {
-                    println!("canceled");
+                    println!("{}", crate::i18n::t("canceled"));
                     return;
                 }
             };
@@ -1074,7 +1065,7 @@ pub(super) fn prompt_scrape_direct_urls() {
             // or the preview re-fills the box instead of losing the batch.
             previous = raw;
             if urls.is_empty() {
-                println!("ℹ No valid URLs — Esc to cancel");
+                println!("{}", crate::i18n::t("no_valid_urls_esc_cancel"));
                 continue;
             }
             break (urls, errors);
@@ -1160,7 +1151,10 @@ fn direct_url_jobs(urls: &[String], cfg: &config::Config) -> Vec<ScrapeJob> {
                 "direct link".to_string(),
             ));
         } else {
-            println!("ℹ {url} — no sites/*.toml match; using general config");
+            println!(
+                "{}",
+                crate::i18n::tf("no_site_match_using_general", &[("url", url)])
+            );
             jobs.push((
                 ScrapeRequest {
                     url: url.clone(),
@@ -1248,7 +1242,7 @@ fn username_prompt(site: &str, initial: &str) -> Option<String> {
         "Username (without @):"
     };
     match crate::cli::interactive::menu::input_text_back(
-        &format!("Download content ─ {site}"),
+        &crate::i18n::tf("download_content_site", &[("site", site)]),
         prompt,
         "someuser",
         "",
@@ -1297,12 +1291,14 @@ pub(super) fn prompt_quick_scrape() {
         let site_name = loop {
             // Rebuilt each time so a step back re-renders the full list.
             let site_list = site_opts_ui(&site_opts);
-            let idx =
-                match crate::cli::interactive::menu::pick_single("Download content", site_list) {
-                    Step::Value(i) => i,
-                    // First question of the flow: Esc leaves.
-                    Step::Back | Step::Cancel => return,
-                };
+            let idx = match crate::cli::interactive::menu::pick_single(
+                &crate::i18n::t("download_content"),
+                site_list,
+            ) {
+                Step::Value(i) => i,
+                // First question of the flow: Esc leaves.
+                Step::Back | Step::Cancel => return,
+            };
             let site = site_opts[idx].clone();
             // Re-ask rather than treat a bare "@" as no answer: previously an
             // input that normalised to empty looked like a step back, so the
@@ -1333,7 +1329,7 @@ pub(super) fn prompt_quick_scrape() {
                 &super::theme::brand_account_label(&format!("{site_name}:{raw_input}")),
             ) {
                 Step::Value(k) if k.is_empty() => {
-                    println!("ℹ No content selected");
+                    println!("{}", crate::i18n::t("no_content_selected"));
                     return;
                 }
                 Step::Value(k) => k,
@@ -1466,13 +1462,12 @@ pub(super) fn prompt_quick_scrape() {
                         }
                         Err(e) => {
                             let site_label = if site_name == "facebook" { "FB" } else { "IG" };
-                            crate::output::print_error(&format!(
-                                "could not resolve ID to username: {e} — check the ID and that your {site_label} session is still valid"
+                            crate::output::print_error(&crate::i18n::tf(
+                                "could_not_resolve_id",
+                                &[("e", &e.to_string()), ("site", site_label)],
                             ));
-                            crate::output::print_help(
-                                "note: the error stays visible until you press Enter",
-                            );
-                            let _ = Text::new("Press Enter to go back")
+                            crate::output::print_help(&crate::i18n::t("error_stays_visible"));
+                            let _ = Text::new(&crate::i18n::t("press_enter_to_go_back"))
                                 .with_render_config(super::theme::render_config())
                                 .prompt();
                             return;
@@ -1575,11 +1570,11 @@ mod integrity_report_tests {
         let out = integrity_report_lines(1, &[entry("clip.mp4", IntegrityIssue::HevcCodec)]);
         let joined = text(&out);
         assert!(
-            !joined.contains("delete"),
+            !joined.contains(&crate::i18n::t("delete_files_rerun_advice")),
             "complete HEVC file must not be told to delete itself:\n{joined}"
         );
         assert!(
-            joined.contains("complete"),
+            joined.contains(&crate::i18n::t("complete_downloads_leave_vlc_ffmpeg")),
             "must say the download is fine:\n{joined}"
         );
     }
@@ -1595,7 +1590,10 @@ mod integrity_report_tests {
             ],
         );
         let joined = text(&out);
-        assert!(joined.contains("delete"), "{joined}");
+        assert!(
+            joined.contains(&crate::i18n::t("delete_files_rerun_advice")),
+            "{joined}"
+        );
         assert!(joined.contains("a.part") && joined.contains("b.mp4"));
     }
 
@@ -1603,13 +1601,16 @@ mod integrity_report_tests {
     fn unreadable_files_get_their_own_advice() {
         let out = integrity_report_lines(1, &[entry("locked.mp4", IntegrityIssue::Unreadable)]);
         let joined = text(&out);
-        assert!(joined.contains("could not be read"), "{joined}");
         assert!(
-            joined.contains("unknown"),
+            joined.contains(&crate::i18n::tf("files_could_not_be_read", &[("n", "1")])),
+            "{joined}"
+        );
+        assert!(
+            joined.contains(&crate::i18n::t("completeness_unknown_advice")),
             "must say completeness is unknown:\n{joined}"
         );
         assert!(
-            !joined.contains("delete"),
+            !joined.contains(&crate::i18n::t("delete_files_rerun_advice")),
             "an unreadable file is not a reason to delete:\n{joined}"
         );
     }
@@ -1625,13 +1626,19 @@ mod integrity_report_tests {
             ],
         );
         let joined = text(&out);
-        assert!(joined.contains("look incomplete"), "{joined}");
+        assert!(
+            joined.contains(&crate::i18n::tf("files_look_incomplete", &[("n", "1")])),
+            "{joined}"
+        );
         assert!(joined.contains("H.265/HEVC"), "{joined}");
-        assert!(joined.contains("could not be read"), "{joined}");
+        assert!(
+            joined.contains(&crate::i18n::tf("files_could_not_be_read", &[("n", "1")])),
+            "{joined}"
+        );
         // The delete advice must be attached to the incomplete list only.
         let delete_line = out
             .iter()
-            .find(|(_, t)| t.contains("delete the file(s)"))
+            .find(|(_, t)| t.contains(&crate::i18n::t("delete_files_rerun_advice")))
             .map(|(e, _)| *e);
         assert_eq!(delete_line, Some(true), "delete advice goes to stderr");
     }

@@ -133,7 +133,10 @@ fn log_window<'a>(logs: &'a [&'a String], scroll: usize, rows: usize) -> &'a [&'
 /// One rendered job row (pure — unit-testable).
 fn job_line(job: &JobRow, index: usize, total: usize) -> String {
     let files = if matches!(job.state, JobState::Running | JobState::Done(_)) {
-        format!(" · {} archivos", job.files)
+        format!(
+            " · {}",
+            crate::i18n::tf("dashboard_files", &[("n", &job.files.to_string())])
+        )
     } else {
         String::new()
     };
@@ -240,9 +243,9 @@ fn draw(
     }
     if finished {
         let (msg, color) = if cancelled {
-            ("⚠ Cancelled — press Enter to go back", Color::Yellow)
+            (crate::i18n::t("dashboard_cancelled_prompt"), Color::Yellow)
         } else {
-            ("✔ Done — press Enter to go back", Color::Green)
+            (crate::i18n::t("dashboard_done_prompt"), Color::Green)
         };
         lines.push(Line::styled(
             msg,
@@ -250,7 +253,7 @@ fn draw(
         ));
     } else {
         lines.push(Line::styled(
-            "Ctrl-C: abort",
+            crate::i18n::t("ctrl_c_abort"),
             Style::default()
                 .fg(Color::DarkGray)
                 .add_modifier(Modifier::ITALIC),
@@ -289,9 +292,9 @@ fn draw(
             })
             .collect();
         let title = if log_scroll > 0 {
-            " log (↑↓ scroll · more ↓) "
+            crate::i18n::t("log_more")
         } else {
-            " log (↑↓ scroll) "
+            crate::i18n::t("log_scroll_hint")
         };
         let log_block = Paragraph::new(log_lines)
             .block(
@@ -312,7 +315,7 @@ fn draw(
 ///
 /// When the user presses Ctrl-C in the dashboard the abort flag is also set.
 /// After the worker returns the dashboard does NOT close: it keeps rendering
-/// a finished state ("Done") until the user presses Enter (or Ctrl-C),
+/// a finished state (crate::i18n::t("done")) until the user presses Enter (or Ctrl-C),
 /// so results can be inspected before returning to the menu. While running,
 /// ↑↓ / PgUp / PgDn scroll the log panel (no mouse capture — text selection
 /// stays available).
@@ -331,7 +334,10 @@ where
     let guard = match TerminalGuard::enter() {
         Ok(guard) => guard,
         Err(e) => {
-            eprintln!("error: cannot enter TUI mode: {e}");
+            eprintln!(
+                "{}",
+                crate::i18n::t("tui_error").replace("{e}", &e.to_string())
+            );
             return worker();
         }
     };
@@ -371,7 +377,7 @@ where
                     show_logs,
                     snapshot_scroll,
                     render_finished.load(Ordering::Relaxed),
-                    // "Cancelled" only in the finished phase (abort + done)
+                    // crate::i18n::t("cancelled") only in the finished phase (abort + done)
                     render_finished.load(Ordering::Relaxed) && render_abort.load(Ordering::Relaxed),
                 );
             });

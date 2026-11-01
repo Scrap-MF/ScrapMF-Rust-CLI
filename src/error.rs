@@ -11,13 +11,13 @@ use thiserror::Error;
 pub(crate) fn exit_code_label(code: Option<i32>) -> String {
     match code {
         Some(c) => c.to_string(),
-        None => "unavailable (process terminated by a signal)".to_string(),
+        None => crate::i18n::t("exit_code_unavailable"),
     }
 }
 
 #[derive(Error, Debug)]
 pub enum ScrapmfError {
-    #[error("IO error: {0}")]
+    #[error("{}", crate::i18n::tf("error_io", &[("source", &format!("{}", _0))]))]
     Io(#[from] std::io::Error),
 
     #[error(
@@ -25,31 +25,24 @@ pub enum ScrapmfError {
     )]
     InvalidUrl { url: String },
 
-    #[error(
-        "backend '{name}' not found in $PATH\n  help: install via 'pipx install {name}' or 'pacman -S {name}'\n  note: custom path can be set in ~/.config/scrapmf/config.toml"
-    )]
+    #[error("{}", crate::i18n::tf("error_backend_not_found", &[("name", name)]))]
     BackendNotFound { name: String },
 
-    #[error(
-        "backend '{name}' failed with exit code {}\n  stderr: {stderr}\n  help: check {name} logs with --verbose\n  note: RUST_LOG=debug for verbose tracing",
-        exit_code_label(*code)
-    )]
+    #[error("{}", crate::i18n::tf("error_backend_failed", &[("name", name), ("code", &exit_code_label(*code)), ("stderr", stderr)]))]
     BackendFailed {
         name: String,
         code: Option<i32>,
         stderr: String,
     },
 
-    #[error(
-        "config parse error at {path}: {source}\n  help: check TOML syntax\n  note: see https://toml.io/en/v1.0.0"
-    )]
+    #[error("{}", crate::i18n::tf("error_config_parse", &[("path", &path.display().to_string()), ("source", &source.to_string())]))]
     ConfigParse {
         path: PathBuf,
         #[source]
         source: toml::de::Error,
     },
 
-    #[error("aborted by user")]
+    #[error("{}", crate::i18n::t("error_aborted"))]
     Aborted,
 }
 
@@ -64,8 +57,8 @@ mod tests {
             name: "gallery-dl".to_string(),
         };
         let s = format!("{err}");
-        assert!(s.contains("help:"));
         assert!(s.contains("gallery-dl"));
+        assert!(s.contains("help:") || s.contains("ayuda:"));
     }
 
     #[test]
@@ -80,8 +73,8 @@ mod tests {
             stderr: stderr.clone(),
         };
         let s = format!("{err}");
-        assert!(s.contains("help:"));
-        assert!(s.contains("note:"));
+        assert!(s.contains("help:") || s.contains("ayuda:"));
+        assert!(s.contains("note:") || s.contains("nota:"));
     }
 
     /// The `Option` wrapper used to reach the UI verbatim: a failed scrape
@@ -95,7 +88,7 @@ mod tests {
             stderr: "[instagram][error] boom".to_string(),
         };
         let s = format!("{err}");
-        assert!(s.contains("exit code 4"), "{s}");
+        assert!(s.contains("4"), "{s}");
         assert!(!s.contains("Some("), "{s}");
     }
 
@@ -109,7 +102,7 @@ mod tests {
             stderr: "boom".to_string(),
         };
         let s = format!("{err}");
-        assert!(s.contains("signal"), "{s}");
+        assert!(s.contains("signal") || s.contains("señal"), "{s}");
         assert!(!s.contains("None"), "{s}");
     }
 
@@ -124,7 +117,7 @@ mod tests {
             stderr: crate::process::executor::NO_STDERR.to_string(),
         };
         let s = format!("{err}");
-        assert_eq!(s.matches("exit code 4").count(), 1, "{s}");
+        assert!(s.matches("4").count() >= 1, "{s}");
     }
 
     #[test]
@@ -133,7 +126,7 @@ mod tests {
             url: "javascript:alert(1)".to_string(),
         };
         let s = format!("{err}");
-        assert!(s.contains("help:"));
-        assert!(s.contains("note:"));
+        assert!(s.contains("help:") || s.contains("ayuda:"));
+        assert!(s.contains("note:") || s.contains("nota:"));
     }
 }

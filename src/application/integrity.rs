@@ -542,7 +542,7 @@ mod tests {
         if got.is_none() {
             // Running as root, or a filesystem that ignores the mode bits:
             // there is no unreadable file to observe, so nothing to prove.
-            eprintln!("skipping: this process can read a 0o000 file");
+            eprintln!("{}", crate::i18n::t("skipping_unreadable_file"));
             return;
         }
         assert_eq!(got, Some(IntegrityIssue::Unreadable));

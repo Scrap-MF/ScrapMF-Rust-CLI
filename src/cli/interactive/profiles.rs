@@ -48,7 +48,7 @@ fn choose_content_kinds(selected: &[(String, String, crate::config::Account)]) -
             if site_has_content_menu(site) {
                 match prompt_content_kinds(site, label) {
                     Step::Value(k) if k.is_empty() => {
-                        println!("ℹ No content selected");
+                        println!("{}", crate::i18n::t("no_content_selected"));
                         return ContentPick::Leave;
                     }
                     Step::Value(k) => per_account_kinds.push(k),
@@ -68,8 +68,8 @@ fn choose_content_kinds(selected: &[(String, String, crate::config::Account)]) -
         // Enter says yes: applying one choice to every account is the expected
         // action, and nothing is destroyed here.
         let same_for_all = match crate::cli::interactive::menu::confirm_back(
-            "Add account",
-            "Apply the same content selection to all accounts?",
+            &crate::i18n::t("profile_add_account"),
+            &crate::i18n::t("apply_same_content_all_accounts"),
             true,
             false,
         ) {
@@ -85,7 +85,7 @@ fn choose_content_kinds(selected: &[(String, String, crate::config::Account)]) -
                 .map(|s| (s.to_string(), Vec::new()))
                 .collect();
             let idxs = match crate::cli::interactive::menu::pick_multi_back(
-                "Content type(s) for all accounts",
+                &crate::i18n::t("content_types_for_all_accounts"),
                 opts.clone(),
                 &[],
             ) {
@@ -115,7 +115,7 @@ fn choose_content_kinds(selected: &[(String, String, crate::config::Account)]) -
             for (_site, label, _acc) in selected {
                 match prompt_content_kinds(site, label) {
                     Step::Value(k) if k.is_empty() => {
-                        println!("ℹ No content selected");
+                        println!("{}", crate::i18n::t("no_content_selected"));
                         return ContentPick::Leave;
                     }
                     Step::Value(k) => per_account_kinds.push(k),
@@ -139,7 +139,7 @@ pub(super) fn prompt_scrape_as_profile() {
         .collect();
     profile_names.sort();
     if profile_names.is_empty() {
-        println!("ℹ No profiles yet — create one via Configuration → Manage Profiles");
+        println!("{}", crate::i18n::t("no_profiles_yet"));
         return;
     }
     // First question of this flow: Esc leaves, there is nothing before it.
@@ -147,10 +147,15 @@ pub(super) fn prompt_scrape_as_profile() {
     // instead of abandoning the run: preview → content → accounts → profile.
     'wizard: loop {
         let idx = match crate::cli::interactive::menu::pick_single(
-            "Choose profile",
+            crate::i18n::t("choose_profile").as_str(),
             profile_names
                 .iter()
-                .map(|n| (n.clone(), vec![format!("profile: {n}")]))
+                .map(|n| {
+                    (
+                        n.clone(),
+                        vec![crate::i18n::tf("profile_label_detail", &[("profile", n)])],
+                    )
+                })
                 .collect(),
         ) {
             Step::Value(i) => i,
@@ -165,7 +170,10 @@ pub(super) fn prompt_scrape_as_profile() {
         let mut available_sites: Vec<String> = profile.accounts.keys().cloned().collect();
         available_sites.sort();
         if available_sites.is_empty() {
-            println!("ℹ Profile {profile_choice} has no accounts — edit it via Manage Profiles");
+            println!(
+                "{}",
+                crate::i18n::tf("profile_no_accounts", &[("profile", &profile_choice)])
+            );
             return;
         }
 
@@ -182,8 +190,11 @@ pub(super) fn prompt_scrape_as_profile() {
         }
         if !missing_sites.is_empty() {
             println!(
-                "ℹ Sites not configured (create via Configuration → Manage Sites): {}",
-                missing_sites.join(", ")
+                "{}",
+                crate::i18n::tf(
+                    "sites_not_configured",
+                    &[("sites", &missing_sites.join(", "))]
+                )
             );
         }
 
@@ -201,7 +212,10 @@ pub(super) fn prompt_scrape_as_profile() {
             }
         }
         if flat.is_empty() {
-            println!("ℹ Profile {profile_choice} has no accounts — edit it via Manage Profiles");
+            println!(
+                "{}",
+                crate::i18n::tf("profile_no_accounts", &[("profile", &profile_choice)])
+            );
             return;
         }
 
@@ -212,13 +226,16 @@ pub(super) fn prompt_scrape_as_profile() {
             .collect();
         // Esc here goes back to the profile list rather than abandoning the run:
         // picking the wrong profile and stepping back is the common case.
-        let idxs =
-            match crate::cli::interactive::menu::pick_multi_back("Select account(s)", opts, &[]) {
-                Step::Value(v) if v.is_empty() => return,
-                Step::Value(v) => v,
-                Step::Back => continue 'wizard,
-                Step::Cancel => return,
-            };
+        let idxs = match crate::cli::interactive::menu::pick_multi_back(
+            &crate::i18n::t("select_accounts"),
+            opts,
+            &[],
+        ) {
+            Step::Value(v) if v.is_empty() => return,
+            Step::Value(v) => v,
+            Step::Back => continue 'wizard,
+            Step::Cancel => return,
+        };
         let picked_labels: Vec<String> = idxs
             .into_iter()
             .filter_map(|i| account_options.get(i).cloned())
@@ -239,7 +256,7 @@ pub(super) fn prompt_scrape_as_profile() {
             })
             .collect();
         if selected.is_empty() {
-            println!("ℹ No accounts selected");
+            println!("{}", crate::i18n::t("no_accounts_selected"));
             return;
         }
 
@@ -270,7 +287,10 @@ pub(super) fn prompt_scrape_as_profile() {
                     continue;
                 };
                 if validate_url(&url).is_err() {
-                    eprintln!("warn: skipping invalid url {url}");
+                    eprintln!(
+                        "{}",
+                        crate::i18n::tf("warn_skipping_invalid_url", &[("url", &url)])
+                    );
                     continue;
                 }
                 let kinds_desc = kinds_description(site_name, kinds);
@@ -464,7 +484,7 @@ pub(super) fn prompt_scrape_as_profile() {
             }
         }
     }
-    let _ = Text::new("Press enter to continue")
+    let _ = Text::new(&crate::i18n::t("press_enter_to_continue"))
         .with_render_config(render_config())
         .prompt();
 }
@@ -485,13 +505,13 @@ pub(super) fn prompt_new_profile_accounts(name: &str) -> crate::config::Profile 
             .cloned()
             .map(crate::cli::interactive::theme::SiteItem::new)
             .collect();
-        let Ok(site) = select_menu("Add account for site:", items)
+        let Ok(site) = select_menu(&crate::i18n::t("add_account_for_site"), items)
             .prompt()
             .map(|s| s.key())
         else {
             break;
         };
-        let Some(username) = ask_nonempty("Username:") else {
+        let Some(username) = ask_nonempty(&crate::i18n::t("username")) else {
             break;
         };
 
@@ -509,8 +529,8 @@ pub(super) fn prompt_new_profile_accounts(name: &str) -> crate::config::Profile 
             });
 
         let more = crate::cli::interactive::menu::confirm_back(
-            "Add account",
-            "Add another account?",
+            &crate::i18n::t("profile_add_account"),
+            crate::i18n::t("add_another_account").as_str(),
             false,
             false,
         )
@@ -540,19 +560,19 @@ pub(super) fn prompt_cookies_choice(
     current_file: Option<&Path>,
 ) -> (Option<PathBuf>, Option<String>) {
     let mut opts = vec![
-        "Default (from site config)".to_string(),
-        "Custom file path".to_string(),
+        crate::i18n::t("default_from_site_config").to_string(),
+        crate::i18n::t("profile_custom_file_path").to_string(),
     ];
     let current_desc = current_file.map(|p| p.display().to_string());
     if let Some(ref cur) = current_desc {
-        opts.push(format!("Keep current: {cur}"));
+        opts.push(crate::i18n::tf("keep_current", &[("current", cur)]));
     }
-    let choice = match select_menu("Cookies source:", opts).prompt() {
+    let choice = match select_menu(&crate::i18n::t("cookies_source"), opts).prompt() {
         Ok(c) => c,
         Err(_) => return (current_file.map(Path::to_path_buf), None),
     };
-    if choice == "Custom file path" {
-        if let Some(path_str) = ask_nonempty("Cookies file path (Netscape .txt):") {
+    if choice == crate::i18n::t("profile_custom_file_path") {
+        if let Some(path_str) = ask_nonempty(&crate::i18n::t("cookies_file_path_netscape")) {
             return (Some(PathBuf::from(path_str)), None);
         }
         return (current_file.map(Path::to_path_buf), None);
@@ -567,19 +587,25 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
     let raw = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("error: read profile: {e}");
+            eprintln!(
+                "{}",
+                crate::i18n::tf("error_read_profile", &[("e", &e.to_string())])
+            );
             return;
         }
     };
     let mut profile: crate::config::Profile = match toml::from_str(&raw) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("error: profile TOML parse failed: {e}");
-            eprintln!("  help: use Advanced → $EDITOR to fix the syntax manually");
+            eprintln!(
+                "{}",
+                crate::i18n::tf("error_profile_toml_parse", &[("e", &e.to_string())])
+            );
+            eprintln!("{}", crate::i18n::t("help_advanced_editor"));
             // Only escape hatch available on corrupt data
             let _ = crate::cli::interactive::menu::confirm_back(
-                "Manage Profiles",
-                "Open in $EDITOR now?",
+                crate::i18n::t("manage_profiles").as_str(),
+                &crate::i18n::t("open_in_editor_now"),
                 true,
                 false,
             );
@@ -598,7 +624,10 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
         match crate::config::write_profile_file(path, profile) {
             Ok(()) => true,
             Err(e) => {
-                eprintln!("error: save profile: {e}");
+                eprintln!(
+                    "{}",
+                    crate::i18n::tf("error_save_profile", &[("e", &e.to_string())])
+                );
                 false
             }
         }
@@ -619,28 +648,38 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
             }
         }
 
-        println!("Profile: {name} — {} account(s)", account_options.len());
+        println!(
+            "{}",
+            crate::i18n::tf(
+                "profile_header",
+                &[
+                    ("name", name),
+                    ("count", &account_options.len().to_string())
+                ]
+            )
+        );
+        let delete_label = crate::i18n::t("delete_profile");
         let options = vec![
-            "Add account",
-            "Edit account",
-            "Remove account",
-            "Rename display name",
-            "Show summary",
-            "Advanced: open in $EDITOR",
-            "Delete profile",
-            "Back",
+            crate::i18n::t("profile_add_account"),
+            crate::i18n::t("profile_edit_account"),
+            crate::i18n::t("profile_remove_account"),
+            crate::i18n::t("profile_rename_display_name"),
+            crate::i18n::t("profile_show_summary"),
+            crate::i18n::t("advanced_open_editor").to_string(),
+            delete_label.clone(),
+            crate::i18n::t("back").to_string(),
         ];
-        let choice = match select_menu("Profile menu:", options).prompt() {
+        let choice = match select_menu(&crate::i18n::t("profile_menu"), options).prompt() {
             Ok(c) => c,
             Err(_) => return,
         };
-        match choice {
-            "Back" => return,
-            "Delete profile" => {
+        match choice.as_str() {
+            s if s == crate::i18n::t("back") => return,
+            s if s == crate::i18n::t("delete_profile") => {
                 // Destructive: Enter keeps the profile, `y` deletes it.
                 if crate::cli::interactive::menu::confirm_back(
-                    "Manage Profiles",
-                    &format!("Delete profile '{name}' and its .toml?"),
+                    crate::i18n::t("manage_profiles").as_str(),
+                    &crate::i18n::tf("delete_profile_confirm", &[("name", name)]),
                     false,
                     true,
                 )
@@ -648,23 +687,23 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                 .unwrap_or(false)
                 {
                     let _ = std::fs::remove_file(path);
-                    println!("✔ Deleted profile {name}");
+                    println!("{}", crate::i18n::tf("profile_deleted", &[("name", name)]));
                     return;
                 }
             }
-            "Add account" => {
+            s if s == crate::i18n::t("profile_add_account") => {
                 let site_opts = site_options_with_fallbacks(&["instagram", "tiktok", "facebook"]);
                 let items: Vec<crate::cli::interactive::theme::SiteItem> = site_opts
                     .into_iter()
                     .map(crate::cli::interactive::theme::SiteItem::new)
                     .collect();
-                let Ok(site) = select_menu("Add account for site:", items)
+                let Ok(site) = select_menu(&crate::i18n::t("add_account_for_site"), items)
                     .prompt()
                     .map(|s| s.key())
                 else {
                     continue;
                 };
-                let Some(username) = ask_nonempty("Username:") else {
+                let Some(username) = ask_nonempty(&crate::i18n::t("username")) else {
                     continue;
                 };
                 profile
@@ -676,19 +715,23 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                         ..Default::default()
                     });
                 if save(path, &profile) {
-                    println!("✔ Account added");
+                    println!("{}", crate::i18n::t("account_added"));
                 }
             }
-            "Edit account" => {
+            s if s == crate::i18n::t("profile_edit_account") => {
                 if account_options.is_empty() {
-                    println!("ℹ No accounts to edit");
+                    println!("{}", crate::i18n::t("no_accounts_to_edit"));
                     continue;
                 }
-                let picked =
-                    match select_menu("Edit which account?", account_options.clone()).prompt() {
-                        Ok(c) => c,
-                        Err(_) => continue,
-                    };
+                let picked = match select_menu(
+                    &crate::i18n::t("edit_which_account"),
+                    account_options.clone(),
+                )
+                .prompt()
+                {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
                 let Some(pos) = account_options.iter().position(|o| *o == picked) else {
                     continue;
                 };
@@ -703,7 +746,7 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                     continue;
                 };
                 // Username with current as default
-                let new_username = Text::new("Username:")
+                let new_username = Text::new(&crate::i18n::t("username"))
                     .with_default(acc.username.as_deref().unwrap_or(""))
                     .prompt()
                     .ok()
@@ -720,42 +763,47 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                 // Named cookie profile (outranks the above for this account)
                 let profiles = crate::config::cookies::list_profiles();
                 if !profiles.is_empty() {
-                    let opts: Vec<String> = std::iter::once("(none)".to_string())
-                        .chain(profiles.iter().map(|p| {
-                            format!(
-                                "{p}  — {}",
-                                crate::config::cookies::profile_summary(p).unwrap_or_default()
-                            )
-                        }))
-                        .collect();
+                    let opts: Vec<String> =
+                        std::iter::once(crate::i18n::t("none_paren").to_string())
+                            .chain(profiles.iter().map(|p| {
+                                format!(
+                                    "{p}  — {}",
+                                    crate::config::cookies::profile_summary(p).unwrap_or_default()
+                                )
+                            }))
+                            .collect();
                     if let Ok(choice) =
-                        select_menu("Cookie profile for this account:", opts).prompt()
+                        select_menu(&crate::i18n::t("cookie_profile_for_account"), opts).prompt()
                     {
                         acc.cookie_profile = choice
                             .split("  — ")
                             .next()
-                            .filter(|k: &&str| *k != "(none)")
+                            .filter(|k: &&str| *k != crate::i18n::t("none_paren"))
                             .map(String::from);
                     }
                 }
                 if save(path, &profile) {
-                    println!("✔ Account updated");
+                    println!("{}", crate::i18n::t("account_updated"));
                 }
             }
-            "Remove account" => {
+            s if s == crate::i18n::t("profile_remove_account") => {
                 if account_options.is_empty() {
-                    println!("ℹ No accounts to remove");
+                    println!("{}", crate::i18n::t("no_accounts_to_remove"));
                     continue;
                 }
-                let picked =
-                    match select_menu("Remove which account?", account_options.clone()).prompt() {
-                        Ok(c) => c,
-                        Err(_) => continue,
-                    };
+                let picked = match select_menu(
+                    &crate::i18n::t("remove_which_account"),
+                    account_options.clone(),
+                )
+                .prompt()
+                {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
                 // Destructive: Enter keeps the account, `y` removes it.
                 if !crate::cli::interactive::menu::confirm_back(
-                    "Manage Profiles",
-                    &format!("Remove {picked}?"),
+                    crate::i18n::t("manage_profiles").as_str(),
+                    &crate::i18n::tf("remove_account_confirm", &[("account", &picked)]),
                     false,
                     true,
                 )
@@ -777,12 +825,15 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                     }
                 }
                 if save(path, &profile) {
-                    println!("✔ Account removed");
+                    println!("{}", crate::i18n::t("account_removed"));
                 }
             }
-            "Rename display name" => {
+            s if s == crate::i18n::t("profile_rename_display_name") => {
                 let current = profile.display_name.as_deref().unwrap_or("");
-                match Text::new("Display name:").with_default(current).prompt() {
+                match Text::new(&crate::i18n::t("display_name"))
+                    .with_default(current)
+                    .prompt()
+                {
                     Ok(s) => {
                         let trimmed = s.trim().to_string();
                         profile.display_name = if trimmed.is_empty() {
@@ -791,16 +842,22 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                             Some(trimmed)
                         };
                         if save(path, &profile) {
-                            println!("✔ Display name updated");
+                            println!("{}", crate::i18n::t("display_name_updated"));
                         }
                     }
                     Err(_) => continue,
                 }
             }
-            "Show summary" => {
-                println!("Profile id : {}", profile.profile.as_deref().unwrap_or("?"));
+            s if s == crate::i18n::t("profile_show_summary") => {
+                println!(
+                    "{}",
+                    crate::i18n::tf(
+                        "profile_id_label",
+                        &[("id", profile.profile.as_deref().unwrap_or("?"))]
+                    )
+                );
                 if let Some(ref dn) = profile.display_name {
-                    println!("Display    : {dn}");
+                    println!("{}", crate::i18n::tf("display_label", &[("name", dn)]));
                 }
                 let mut sites_now: Vec<&String> = profile.accounts.keys().collect();
                 sites_now.sort();
@@ -808,27 +865,40 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                     if let Some(list) = profile.accounts.get(site.as_str()) {
                         for acc in list.iter() {
                             println!(
-                                "- {}:{}  cookies={}",
-                                site,
-                                acc.username.as_deref().unwrap_or("(no username)"),
-                                acc.cookies
-                                    .as_ref()
-                                    .map(|c| c.display().to_string())
-                                    .or(acc.cookies_from_browser.clone())
-                                    .unwrap_or_else(|| "default".to_string())
+                                "{}",
+                                crate::i18n::tf(
+                                    "account_cookies_line",
+                                    &[
+                                        ("site", site),
+                                        (
+                                            "username",
+                                            acc.username.as_deref().unwrap_or(&crate::i18n::t(
+                                                "no_username_placeholder"
+                                            ))
+                                        ),
+                                        (
+                                            "cookies",
+                                            &acc.cookies
+                                                .as_ref()
+                                                .map(|c| c.display().to_string())
+                                                .or(acc.cookies_from_browser.clone())
+                                                .unwrap_or_else(|| crate::i18n::t("default"))
+                                        ),
+                                    ]
+                                )
                             );
                         }
                     }
                 }
             }
-            "Advanced: open in $EDITOR" => {
+            s if s == crate::i18n::t("advanced_open_editor") => {
                 edit_with_editor(path);
                 // Reload after possible external edits
                 if let Ok(s) = std::fs::read_to_string(path) {
                     if let Ok(p) = toml::from_str::<crate::config::Profile>(&s) {
                         profile = p;
                     } else {
-                        eprintln!("warn: TOML invalid after external edit — reload skipped");
+                        eprintln!("{}", crate::i18n::t("warn_toml_invalid_reload_skipped"));
                     }
                 }
             }

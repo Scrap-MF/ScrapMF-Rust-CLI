@@ -175,9 +175,7 @@ pub fn maybe_scan(dir: &Path, downloaded: Option<&[String]>) -> ScanOutcome {
         .map(std::path::PathBuf::from)
         .or_else(|| which::which("termux-media-scan").ok());
     let Some(bin) = bin else {
-        crate::output::print_warn(
-            "termux-media-scan not found — install the termux:api app + pkg install termux-api",
-        );
+        crate::output::print_warn(&crate::i18n::t("termux_media_scan_not_found"));
         tracing::warn!(
             "termux-scan enabled but termux-media-scan not found — install termux:api app + pkg install termux-api"
         );
@@ -195,24 +193,30 @@ pub fn maybe_scan(dir: &Path, downloaded: Option<&[String]>) -> ScanOutcome {
                 .file_name()
                 .map(|n| format!("$HOME/storage/downloads/{}", n.to_string_lossy()))
                 .unwrap_or_else(|| "$HOME/storage/downloads/scrapmf".to_string());
-            crate::output::print_error(&format!(
-                "Android Gallery cannot index app-private storage: {}",
-                p.display()
+            crate::output::print_error(&crate::i18n::tf(
+                "media_scan_android_private_storage",
+                &[("path", &p.display().to_string())],
             ));
-            crate::output::print_note(&format!("set output_dir to {hint}"));
+            crate::output::print_note(&crate::i18n::tf(
+                "media_scan_set_output_dir",
+                &[("hint", &hint)],
+            ));
             tracing::warn!(dir=%p.display(), "termux scan skipped: app-private storage is invisible to MediaStore");
             return ScanOutcome::PrivateStorage(p);
         }
         ScanTarget::Missing(p) => {
-            crate::output::print_error(&format!("output dir does not exist yet: {}", p.display()));
+            crate::output::print_error(&crate::i18n::tf(
+                "media_scan_output_dir_missing",
+                &[("path", &p.display().to_string())],
+            ));
             tracing::debug!(dir=%p.display(), "termux scan skipped: dir does not exist yet");
             return ScanOutcome::MissingDir;
         }
     };
 
-    crate::output::print_info(&format!(
-        "→ running termux-media-scan -r {} (this can take a few seconds)",
-        target.display()
+    crate::output::print_info(&crate::i18n::tf(
+        "media_scan_running",
+        &[("path", &target.display().to_string())],
     ));
     run_scan(&bin, &target)
 }
@@ -229,20 +233,23 @@ fn run_scan(bin: &Path, target: &Path) -> ScanOutcome {
     {
         Ok(s) if s.success() => {
             tracing::info!(dir=%target.display(), "termux media scan done");
-            crate::output::print_info("✔ media scan done");
+            crate::output::print_info(&crate::i18n::t("media_scan_done"));
             ScanOutcome::Done
         }
         Ok(s) => {
             tracing::warn!(dir=%target.display(), code=?s.code(), "termux-media-scan non-zero");
-            crate::output::print_error(&format!(
-                "termux-media-scan exited with code {:?}",
-                s.code()
+            crate::output::print_error(&crate::i18n::tf(
+                "media_scan_nonzero_exit",
+                &[("code", &format!("{:?}", s.code()))],
             ));
             ScanOutcome::NonZero(s.code())
         }
         Err(e) => {
             tracing::warn!(dir=%target.display(), error=%e, "termux-media-scan failed");
-            crate::output::print_error(&format!("termux-media-scan failed: {e}"));
+            crate::output::print_error(&crate::i18n::tf(
+                "media_scan_failed",
+                &[("e", &e.to_string())],
+            ));
             ScanOutcome::Failed(e.to_string())
         }
     }

@@ -73,7 +73,10 @@ fn site_configs_in(dir: &std::path::Path, ok: &mut bool) -> Vec<CheckLine> {
             Err(e) => {
                 out.push(CheckLine {
                     level: Level::Error,
-                    text: format!("sites/{name} — cannot read: {e}"),
+                    text: crate::i18n::tf(
+                        "doctor_site_cannot_read",
+                        &[("name", &name), ("e", &e.to_string())],
+                    ),
                 });
                 *ok = false;
                 broken += 1;
@@ -82,12 +85,14 @@ fn site_configs_in(dir: &std::path::Path, ok: &mut bool) -> Vec<CheckLine> {
                 Err(e) => {
                     out.push(CheckLine {
                         level: Level::Error,
-                        text: format!("sites/{name} — does not parse: {e}"),
+                        text: crate::i18n::tf(
+                            "doctor_site_does_not_parse",
+                            &[("name", &name), ("e", &e.to_string())],
+                        ),
                     });
                     out.push(CheckLine {
                         level: Level::Help,
-                        text: "    fix the line above, or delete the file to regenerate it"
-                            .to_string(),
+                        text: crate::i18n::t("doctor_site_fix_or_delete"),
                     });
                     *ok = false;
                     broken += 1;
@@ -99,13 +104,11 @@ fn site_configs_in(dir: &std::path::Path, ok: &mut bool) -> Vec<CheckLine> {
                 {
                     out.push(CheckLine {
                         level: Level::Error,
-                        text: format!(
-                            "sites/{name} — empty or identity-less (no site/pattern/extractor)"
-                        ),
+                        text: crate::i18n::tf("doctor_site_empty_identity", &[("name", &name)]),
                     });
                     out.push(CheckLine {
                         level: Level::Help,
-                        text: "    delete the file to regenerate it".to_string(),
+                        text: crate::i18n::t("doctor_site_delete_to_regenerate"),
                     });
                     *ok = false;
                     broken += 1;
@@ -118,12 +121,15 @@ fn site_configs_in(dir: &std::path::Path, ok: &mut bool) -> Vec<CheckLine> {
     if files.is_empty() {
         out.push(CheckLine {
             level: Level::Warn,
-            text: format!("No site configs found in {}", dir.display()),
+            text: crate::i18n::tf(
+                "doctor_no_site_configs",
+                &[("dir", &dir.display().to_string())],
+            ),
         });
     } else if broken == 0 {
         out.push(CheckLine {
             level: Level::Success,
-            text: format!("Site configs: {} file(s) OK", files.len()),
+            text: crate::i18n::tf("doctor_site_configs_ok", &[("n", &files.len().to_string())]),
         });
     }
     out
@@ -156,29 +162,36 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                 out.push(CheckLine {
                     level: if drifted { Level::Warn } else { Level::Success },
                     text: if drifted {
-                        format!(
-                            "gallery-dl {v} found [{}] but this scrapmf pins v{} — \
-                             run 'scrapmf setup' to update it",
-                            source.label(),
-                            crate::application::backend::GALLERY_DL_PIN
+                        crate::i18n::tf(
+                            "doctor_gallery_dl_drifted",
+                            &[
+                                ("v", &v),
+                                ("label", source.label()),
+                                ("pin", crate::application::backend::GALLERY_DL_PIN),
+                            ],
                         )
                     } else {
-                        format!(
-                            "gallery-dl {v} found [{}]{}",
-                            source.label(),
-                            if managed {
-                                format!(" pinned v{}", crate::application::backend::GALLERY_DL_PIN)
+                        {
+                            let pinned = if managed {
+                                crate::i18n::tf(
+                                    "doctor_gallery_dl_pinned",
+                                    &[("pin", crate::application::backend::GALLERY_DL_PIN)],
+                                )
                             } else {
                                 String::new()
-                            }
-                        )
+                            };
+                            crate::i18n::tf(
+                                "doctor_gallery_dl_found",
+                                &[("v", &v), ("label", source.label()), ("pinned", &pinned)],
+                            )
+                        }
                     },
                 });
             }
             Ok(_) | Err(_) => {
                 out.push(CheckLine {
                     level: Level::Error,
-                    text: "gallery-dl found but --version failed".to_string(),
+                    text: crate::i18n::t("doctor_gallery_dl_version_failed"),
                 });
                 ok = false;
             }
@@ -186,11 +199,11 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
     } else {
         out.push(CheckLine {
             level: Level::Error,
-            text: "gallery-dl not found in $PATH".to_string(),
+            text: crate::i18n::t("gallery_dl_not_found"),
         });
         out.push(CheckLine {
             level: Level::Help,
-            text: "run scrapmf (interactive) and it will offer to install the pinned backend; 'scrapmf setup' also works".to_string(),
+            text: crate::i18n::t("gallery_dl_setup_help"),
         });
         ok = false;
     }
@@ -199,13 +212,12 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
     match crate::application::backend::yt_dlp_executable() {
         Ok(p) => out.push(CheckLine {
             level: Level::Success,
-            text: format!("yt-dlp found (managed) at {}", p.display()),
+            text: crate::i18n::tf("doctor_ytdlp_found", &[("path", &p.display().to_string())]),
         }),
         Err(_) => {
             out.push(CheckLine {
                 level: Level::Warn,
-                text: "yt-dlp not installed (optional; used by gallery-dl ytdl fallback)"
-                    .to_string(),
+                text: crate::i18n::t("doctor_ytdlp_not_installed"),
             });
         }
     }
@@ -216,24 +228,22 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
         match crate::plugins::threads_state() {
             PluginState::Enabled(v) => out.push(CheckLine {
                 level: Level::Success,
-                text: format!("plugins: threads enabled (threadstractormf {v})"),
+                text: crate::i18n::tf("doctor_plugins_threads_enabled", &[("v", &v)]),
             }),
             PluginState::Disabled => out.push(CheckLine {
                 level: Level::Info,
-                text: "plugins: threads disabled — re-enable in scrapmf → Plugins (files kept)"
-                    .to_string(),
+                text: crate::i18n::t("doctor_plugins_threads_disabled"),
             }),
             PluginState::NotInstalled => out.push(CheckLine {
                 level: Level::Info,
-                text: "plugins: threads not installed — optional; enable in scrapmf → Plugins"
-                    .to_string(),
+                text: crate::i18n::t("doctor_plugins_threads_not_installed"),
             }),
         }
         match crate::plugins::termux_scan_state() {
             PluginState::Enabled(_) => {
                 out.push(CheckLine {
                     level: Level::Success,
-                    text: "plugins: termux-scan enabled (termux-media-scan)".to_string(),
+                    text: crate::i18n::t("doctor_plugins_termux_enabled"),
                 });
                 // A scan aimed at app-private storage exits 0 and indexes
                 // nothing, so "enabled" alone would read as working.
@@ -249,27 +259,27 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                                 .unwrap_or_else(|| "scrapmf".to_string());
                             out.push(CheckLine {
                                 level: Level::Warn,
-                                text: format!(
-                                    "termux-scan output dir is app-private storage ({}) — Android Gallery cannot index it; set output_dir to $HOME/storage/downloads/{name}",
-                                    p.display()
+                                text: crate::i18n::tf(
+                                    "doctor_termux_private_storage",
+                                    &[("path", &p.display().to_string()), ("name", &name)],
                                 ),
                             });
                         }
-                        crate::application::media_scan::ScanTarget::Missing(_) => out.push(
-                            CheckLine {
+                        crate::application::media_scan::ScanTarget::Missing(_) => {
+                            out.push(CheckLine {
                                 level: Level::Warn,
-                                text: format!(
-                                    "termux-scan output dir does not exist yet: {}",
-                                    out_dir.display()
+                                text: crate::i18n::tf(
+                                    "doctor_termux_missing_dir",
+                                    &[("dir", &out_dir.display().to_string())],
                                 ),
-                            },
-                        ),
+                            })
+                        }
                         crate::application::media_scan::ScanTarget::Ready(p) => {
                             out.push(CheckLine {
                                 level: Level::Info,
-                                text: format!(
-                                    "termux-scan target: {} (recursive)",
-                                    p.display()
+                                text: crate::i18n::tf(
+                                    "doctor_termux_target",
+                                    &[("path", &p.display().to_string())],
                                 ),
                             })
                         }
@@ -278,12 +288,11 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
             }
             PluginState::Disabled => out.push(CheckLine {
                 level: Level::Info,
-                text: "plugins: termux-scan disabled — enable in scrapmf → Plugins for Android gallery scan"
-                    .to_string(),
+                text: crate::i18n::t("doctor_plugins_termux_disabled"),
             }),
             PluginState::NotInstalled => out.push(CheckLine {
                 level: Level::Info,
-                text: "plugins: termux-scan not installed (termux-media-scan not found) — install termux:api app + pkg install termux-api, then enable in Plugins".to_string(),
+                text: crate::i18n::t("doctor_plugins_termux_not_installed"),
             }),
         }
     }
@@ -294,13 +303,13 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
     if available.is_empty() {
         out.push(CheckLine {
             level: Level::Info,
-            text: format!(
-                "No browser cookie DBs detected (checked: {})",
-                crate::browsers::CHANNELS
+            text: crate::i18n::t("no_cookie_dbs").replace(
+                "{list}",
+                &crate::browsers::CHANNELS
                     .iter()
                     .map(|c| c.id)
                     .collect::<Vec<_>>()
-                    .join(", ")
+                    .join(", "),
             ),
         });
         for b in &browsers {
@@ -309,12 +318,12 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
     } else {
         out.push(CheckLine {
             level: Level::Success,
-            text: "Browsers with cookies:".to_string(),
+            text: crate::i18n::t("doctor_browsers_with_cookies"),
         });
         for b in available {
             out.push(CheckLine {
                 level: Level::Info,
-                text: format!("  - {}", b.display),
+                text: crate::i18n::tf("doctor_browser_item", &[("display", &b.display)]),
             });
         }
     }
@@ -337,14 +346,11 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
             } else {
                 Level::Info
             },
-            text: format!(
-                "secret-tool (libsecret/GNOME): {}",
-                if has_secret_tool {
-                    "found"
-                } else {
-                    "not found (optional — needed for GNOME/libsecret keyrings)"
-                }
-            ),
+            text: if has_secret_tool {
+                crate::i18n::t("doctor_secret_tool_found")
+            } else {
+                crate::i18n::t("doctor_secret_tool_not_found")
+            },
         });
         out.push(CheckLine {
             level: if kwallet_clients.is_empty() {
@@ -353,10 +359,12 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                 Level::Success
             },
             text: if kwallet_clients.is_empty() {
-                "kwallet (KDE): no client found (optional — install kwallet if the browser uses it)"
-                    .to_string()
+                crate::i18n::t("doctor_kwallet_none")
             } else {
-                format!("kwallet (KDE): {}", kwallet_clients.join(", "))
+                crate::i18n::tf(
+                    "doctor_kwallet_found",
+                    &[("clients", &kwallet_clients.join(", "))],
+                )
             },
         });
         // A v11 cookie DB cannot be decrypted without a D-Bus session. Report
@@ -371,16 +379,13 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                 Level::Warn
             },
             text: match &bus {
-                Some(addr) => format!("D-Bus session: reachable at {addr}"),
-                None if crate::config::cookies::keyring_outside_namespace_for_doctor() => {
-                    "D-Bus session: /run/user/<uid>/bus is NOT visible here (chroot, container \
-                     or bare TTY) — the OS keyring runs in the host session, so browser cookies \
-                     cannot be decrypted from in here"
-                        .to_string()
+                Some(addr) => {
+                    crate::i18n::tf("doctor_dbus_reachable", &[("addr", &addr.to_string())])
                 }
-                None => "D-Bus session: no bus found — browser cookies that need the keyring \
-                 cannot be decrypted (import them instead: Configuration → Cookie profiles)"
-                    .to_string(),
+                None if crate::config::cookies::keyring_outside_namespace_for_doctor() => {
+                    crate::i18n::t("doctor_dbus_outside_namespace")
+                }
+                None => crate::i18n::t("doctor_dbus_none"),
             },
         });
     }
@@ -391,7 +396,7 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
         if verbose > 0 {
             out.push(CheckLine {
                 level: Level::Success,
-                text: "Backend resolution OK".to_string(),
+                text: crate::i18n::t("doctor_backend_resolution_ok"),
             });
         }
     }
@@ -423,15 +428,18 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
         if files == 0 {
             out.push(CheckLine {
                 level: Level::Info,
-                text: "Download archive: empty (dedup records appear after first scrape)"
-                    .to_string(),
+                text: crate::i18n::t("download_archive_empty").to_string(),
             });
         } else {
             out.push(CheckLine {
                 level: Level::Success,
-                text: format!(
-                    "Download archive: {entries} media across {files} account(s) in {}",
-                    archive_dir.display()
+                text: crate::i18n::tf(
+                    "doctor_download_archive",
+                    &[
+                        ("entries", &entries.to_string()),
+                        ("files", &files.to_string()),
+                        ("dir", &archive_dir.display().to_string()),
+                    ],
                 ),
             });
         }
@@ -444,13 +452,16 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
             let _ = std::fs::remove_dir(&test_dir);
             out.push(CheckLine {
                 level: Level::Success,
-                text: format!("Temp dir writable: {}", test_dir.display()),
+                text: crate::i18n::tf(
+                    "doctor_temp_dir_writable",
+                    &[("dir", &test_dir.display().to_string())],
+                ),
             });
         }
         Err(e) => {
             out.push(CheckLine {
                 level: Level::Error,
-                text: format!("Temp dir not writable: {e}"),
+                text: crate::i18n::tf("doctor_temp_dir_not_writable", &[("e", &e.to_string())]),
             });
             ok = false;
         }
@@ -463,7 +474,7 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
     match cfg_for_session.general.cookies_from_browser.as_deref() {
         None => out.push(CheckLine {
             level: Level::Warn,
-            text: "Browser cookies: not set — every site scrapes anonymously".to_string(),
+            text: crate::i18n::t("doctor_browser_cookies_not_set"),
         }),
         Some(id) => {
             let ch = crate::browsers::resolve_channel(id);
@@ -481,7 +492,7 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
             if ch.is_none() {
                 out.push(CheckLine {
                     level: Level::Error,
-                    text: format!("Browser cookies: {id} is not a known browser"),
+                    text: crate::i18n::tf("doctor_browser_cookies_unknown", &[("id", id)]),
                 });
                 ok = false;
             } else if found {
@@ -489,11 +500,17 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                 // and two browsers on the same machine can be two different
                 // accounts. Also warn when the cookie database has gone quiet,
                 // which is what an abandoned profile directory looks like.
-                let mut text = format!("Browser cookies: {label} [{id}] — used for every site");
+                let mut text = crate::i18n::tf(
+                    "doctor_browser_cookies_used",
+                    &[("label", &label), ("id", id)],
+                );
                 let acct = crate::config::cookies::instagram_account_for_channel(id);
                 match &acct {
-                    Some(a) => text.push_str(&format!(", Instagram account {a}")),
-                    None => text.push_str(", Instagram account unknown until first scrape"),
+                    Some(a) => text.push_str(&crate::i18n::tf(
+                        "doctor_browser_cookies_ig_account",
+                        &[("a", a)],
+                    )),
+                    None => text.push_str(&crate::i18n::t("doctor_browser_cookies_ig_unknown")),
                 }
                 let stale = ch.and_then(cookie_db_stale_days).is_some_and(|d| d >= 14);
                 let line = CheckLine {
@@ -504,10 +521,7 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                 if stale {
                     out.push(CheckLine {
                         level: Level::Warn,
-                        text: format!(
-                            "{label}: cookie database unchanged for 14+ days — this profile looks \
-abandoned, and the session in it may be long dead"
-                        ),
+                        text: crate::i18n::tf("doctor_cookie_db_stale", &[("label", &label)]),
                     });
                 }
                 // The captured session is replayed until the browser's database
@@ -522,18 +536,18 @@ abandoned, and the session in it may be long dead"
                 {
                     out.push(CheckLine {
                         level: Level::Warn,
-                        text: format!(
-                            "{label}: the captured session is older than the browser's cookie \
-database — it will be re-captured on the next scrape"
+                        text: crate::i18n::tf(
+                            "doctor_captured_session_older",
+                            &[("label", &label)],
                         ),
                     });
                 }
             } else {
                 out.push(CheckLine {
                     level: Level::Error,
-                    text: format!(
-                        "Browser cookies: {label} [{id}] is configured but not usable — \
-                         binary or cookie database not found"
+                    text: crate::i18n::tf(
+                        "doctor_browser_cookies_unusable",
+                        &[("label", &label), ("id", id)],
                     ),
                 });
                 ok = false;
@@ -546,7 +560,7 @@ database — it will be re-captured on the next scrape"
     if ok {
         out.push(CheckLine {
             level: Level::Success,
-            text: "All checks passed".to_string(),
+            text: crate::i18n::t("all_checks_passed"),
         });
     }
     (out, ok)
@@ -554,7 +568,7 @@ database — it will be re-captured on the next scrape"
 
 pub fn run(verbose: u8) -> Result<()> {
     tracing::debug!(verbose = verbose, "doctor start");
-    println!("scrapmf doctor — checking backends and system");
+    println!("{}", crate::i18n::t("doctor_title"));
     println!("─────────────────────────────────────────────");
 
     let (lines, ok) = collect(verbose);
@@ -573,9 +587,7 @@ pub fn run(verbose: u8) -> Result<()> {
         // "All checks passed" is already the last line from collect
         Ok(())
     } else {
-        Err(anyhow::anyhow!(
-            "some doctor checks failed (see details above)"
-        ))
+        Err(anyhow::anyhow!(crate::i18n::t("doctor_checks_failed")))
     }
 }
 
@@ -635,8 +647,17 @@ mod site_config_tests {
 
         assert!(!ok, "a broken site config must fail the check");
         let out = texts(&lines);
+        let marker = crate::i18n::t("doctor_site_does_not_parse")
+            .split('—')
+            .nth(1)
+            .unwrap_or("")
+            .split(':')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_string();
         assert!(
-            out.contains("instagram.toml") && out.contains("does not parse"),
+            out.contains("instagram.toml") && out.contains(&marker),
             "must name the file and the problem:\n{out}"
         );
     }
@@ -650,8 +671,17 @@ mod site_config_tests {
         let lines = site_configs_in(dir.path(), &mut ok);
 
         assert!(!ok, "identity-less config must fail the check");
+        let marker = crate::i18n::t("doctor_site_empty_identity")
+            .split('—')
+            .nth(1)
+            .unwrap_or("")
+            .split('(')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_string();
         assert!(
-            texts(&lines).contains("identity-less"),
+            texts(&lines).contains(&marker),
             "unexpected output:\n{}",
             texts(&lines)
         );
@@ -664,8 +694,14 @@ mod site_config_tests {
         let lines = site_configs_in(dir.path(), &mut ok);
 
         assert!(ok, "no site configs is not a failure");
+        let marker = crate::i18n::t("doctor_no_site_configs")
+            .split("{dir}")
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_string();
         assert!(
-            texts(&lines).contains("No site configs"),
+            texts(&lines).contains(&marker),
             "unexpected output:\n{}",
             texts(&lines)
         );

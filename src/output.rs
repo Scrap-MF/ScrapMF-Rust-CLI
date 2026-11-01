@@ -16,7 +16,12 @@ pub fn print_error(msg: &str) {
     let style = Style::new()
         .fg_color(Some(Color::Ansi(AnsiColor::Red)))
         .bold();
-    anstream::eprintln!("{}error:{} {msg}", style.render(), Style::new().render());
+    anstream::eprintln!(
+        "{}{}:{} {msg}",
+        style.render(),
+        crate::i18n::t("output_error_label"),
+        Style::new().render()
+    );
 }
 
 pub fn print_info(msg: &str) {
@@ -29,7 +34,12 @@ pub fn print_warn(msg: &str) {
     let style = Style::new()
         .fg_color(Some(Color::Ansi(AnsiColor::Yellow)))
         .bold();
-    anstream::println!("{}warning:{} {msg}", style.render(), Style::new().render());
+    anstream::println!(
+        "{}{}:{} {msg}",
+        style.render(),
+        crate::i18n::t("output_warning_label"),
+        Style::new().render()
+    );
 }
 
 pub fn print_help(msg: &str) {
@@ -39,5 +49,10 @@ pub fn print_help(msg: &str) {
 
 pub fn print_note(msg: &str) {
     let style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
-    anstream::eprintln!("{}note:{} {msg}", style.render(), Style::new().render());
+    anstream::eprintln!(
+        "{}{}:{} {msg}",
+        style.render(),
+        crate::i18n::t("output_note_label"),
+        Style::new().render()
+    );
 }

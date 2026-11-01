@@ -300,9 +300,9 @@ fn drift_notice(installed: &str, pinned: &str) -> Option<String> {
     if installed == pinned {
         return None;
     }
-    Some(format!(
-        "bundled gallery-dl is {installed} but this scrapmf pins {pinned} \
-         — run 'scrapmf setup' to update it"
+    Some(crate::i18n::tf(
+        "backend_gdl_drift",
+        &[("installed", installed), ("pinned", pinned)],
     ))
 }
 
@@ -311,15 +311,14 @@ fn drift_notice(installed: &str, pinned: &str) -> Option<String> {
 pub fn gallery_dl_executable() -> anyhow::Result<PathBuf> {
     let cfg = crate::config::load().unwrap_or_default();
     match resolve(cfg.backend.gallery_dl_path.clone()) {
-        Source::Missing => Err(anyhow::anyhow!(
-            "gallery-dl backend is not installed\n  help: run 'scrapmf setup' to install the \
-                 bundled pinned v{GALLERY_DL_PIN} build\n  note: your system gallery-dl (if any) is \
-                 never used automatically"
-        )),
+        Source::Missing => Err(anyhow::anyhow!(crate::i18n::tf(
+            "backend_gdl_not_installed",
+            &[("pin", GALLERY_DL_PIN)]
+        ))),
         src => src
             .path()
             .map(Path::to_path_buf)
-            .ok_or_else(|| anyhow::anyhow!("backend resolution returned an unusable result")),
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::i18n::t("backend_resolution_unusable"))),
     }
 }
 
@@ -374,10 +373,10 @@ pub fn yt_dlp_executable() -> anyhow::Result<PathBuf> {
     if let Some(p) = yt_dlp_managed_path() {
         return Ok(p);
     }
-    Err(anyhow::anyhow!(
-        "yt-dlp backend is not installed\n  help: run 'scrapmf setup' to install the \
-         bundled pinned v{YT_DLP_PIN} build"
-    ))
+    Err(anyhow::anyhow!(crate::i18n::tf(
+        "backend_ytdlp_not_installed",
+        &[("pin", YT_DLP_PIN)]
+    )))
 }
 
 #[cfg(test)]

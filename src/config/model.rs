@@ -89,6 +89,13 @@ pub struct General {
     /// channels actually installed here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cookies_from_browser: Option<String>,
+    /// UI language: "en" (default) or "es".
+    #[serde(default = "default_language")]
+    pub language: String,
+}
+
+fn default_language() -> String {
+    "en".to_string()
 }
 
 fn default_true() -> bool {
@@ -227,6 +234,7 @@ impl Default for General {
             output_dir: PathBuf::from("~/scrapmf"),
             archive: true,
             cookies_from_browser: None,
+            language: "en".to_string(),
         }
     }
 }
