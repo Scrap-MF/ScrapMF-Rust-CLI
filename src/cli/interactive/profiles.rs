@@ -68,7 +68,7 @@ fn choose_content_kinds(selected: &[(String, String, crate::config::Account)]) -
         // Enter says yes: applying one choice to every account is the expected
         // action, and nothing is destroyed here.
         let same_for_all = match crate::cli::interactive::menu::confirm_back(
-            crate::i18n::t("profile_add_account"),
+            &crate::i18n::t("profile_add_account"),
             "Apply the same content selection to all accounts?",
             true,
             false,
@@ -509,7 +509,7 @@ pub(super) fn prompt_new_profile_accounts(name: &str) -> crate::config::Profile 
             });
 
         let more = crate::cli::interactive::menu::confirm_back(
-            crate::i18n::t("profile_add_account"),
+            &crate::i18n::t("profile_add_account"),
             crate::i18n::t("add_another_account").as_str(),
             false,
             false,
@@ -627,15 +627,15 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
             crate::i18n::t("profile_remove_account"),
             crate::i18n::t("profile_rename_display_name"),
             crate::i18n::t("profile_show_summary"),
-            "Advanced: open in $EDITOR",
-            delete_label.as_str(),
-            "Back",
+            "Advanced: open in $EDITOR".to_string(),
+            delete_label.clone(),
+            "Back".to_string(),
         ];
         let choice = match select_menu("Profile menu:", options).prompt() {
             Ok(c) => c,
             Err(_) => return,
         };
-        match choice {
+        match choice.as_str() {
             "Back" => return,
             s if s == crate::i18n::t("delete_profile").as_str() => {
                 // Destructive: Enter keeps the profile, `y` deletes it.

@@ -119,7 +119,7 @@ pub fn run() {
                 // Named rather than positional: this list grows, and a bare
                 // `Picked(3)` is the kind of dispatch that rots the moment an
                 // entry is inserted in the middle.
-                let outcome = Browser::new(&crate::i18n::t("download_content"))
+                let outcome = Browser::new(crate::i18n::t("download_content"))
                     .entry(
                         crate::i18n::t("saved_profile"),
                         vec![

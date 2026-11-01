@@ -374,7 +374,7 @@ fn general_settings_menu() {
                 ),
             }
         } else if choice.starts_with(&format!("{}:", crate::i18n::t("language"))) {
-            let langs = vec!["en".to_string(), "es".to_string()];
+            let langs = ["en".to_string(), "es".to_string()];
             let idx = match crate::cli::interactive::menu::pick_single(
                 "Configuration ─ General settings ─ Language",
                 langs
@@ -553,7 +553,7 @@ fn cookie_profiles_menu() {
             browse_label,
             "Create profile — capture from browser".into(),
             "Import profile — from file or paste".into(),
-            crate::i18n::t("back").into(),
+            crate::i18n::t("back"),
         ];
         let choice = match select_menu("Cookie profiles", choices).prompt() {
             Ok(c) => c,
@@ -613,7 +613,7 @@ fn profile_detail_menu(name: &str) {
             "View details".into(),
             "Refresh — re-capture from browser".into(),
             "Delete profile".into(),
-            crate::i18n::t("back").into(),
+            crate::i18n::t("back"),
         ];
         let choice = match select_menu_with_details(
             &format!("Profile: {name}"),
@@ -713,7 +713,7 @@ fn import_profile_submenu_prefilled(default_name: &str) {
         let choices: Vec<String> = vec![
             "Import from file — select cookies.txt".into(),
             "Import from paste — open $EDITOR".into(),
-            crate::i18n::t("back").into(),
+            crate::i18n::t("back"),
         ];
         let choice = match select_menu("Import profile", choices).prompt() {
             Ok(c) => c,
