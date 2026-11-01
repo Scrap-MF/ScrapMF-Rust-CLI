@@ -64,7 +64,7 @@ pub fn run(yes: bool) -> Result<()> {
     // x86_64 has an official standalone build → direct managed install.
     // Every other desktop arch has none (Termux/ARM handled below); Windows
     // x86_64 DOES have one (gallery-dl.exe).
-    if backend::is_dev_pin() {
+    let gd_result = if backend::is_dev_pin() {
         install_via_python(yes);
         Ok(())
     } else if std::env::consts::ARCH == "x86_64" || cfg!(windows) {
@@ -72,7 +72,13 @@ pub fn run(yes: bool) -> Result<()> {
     } else {
         install_via_python(yes);
         Ok(())
-    }
+    };
+
+    // Also ensure the managed (pinned) yt-dlp backend is present so gallery-dl's
+    // ytdl fallback never depends on a system-wide yt-dlp.
+    let _ = install_yt_dlp_managed(yes);
+
+    gd_result
 }
 
 /// One candidate installer for the pinned gallery-dl on non-x86_64 hosts.
@@ -301,6 +307,47 @@ fn install_managed(yes: bool) -> Result<()> {
     ));
     output::print_info("  It never updates on its own; new pins ship with scrapmf releases.");
     print_version(&target);
+    Ok(())
+}
+
+/// Install the pinned yt-dlp standalone binary into the managed dir.
+fn install_yt_dlp_managed(yes: bool) -> Result<()> {
+    use crate::application::backend;
+    let dir = backend::managed_dir().context("cannot determine data directory")?;
+    std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
+    let asset = backend::yt_dlp_asset();
+    let target = dir.join(asset);
+    if target.is_file() {
+        // Already present — keep it (pinned by scrapmf release).
+        output::print_success(&format!(
+            "bundled yt-dlp already installed at {}",
+            target.display()
+        ));
+        return Ok(());
+    }
+    let url = format!("{}/{}", backend::yt_dlp_release_base_url(), asset);
+    println!(
+        "→ Installing bundled yt-dlp v{} (~? MB download)",
+        backend::YT_DLP_PIN
+    );
+    if !yes
+        && !confirm(&format!(
+            "Download and install yt-dlp v{} now?",
+            backend::YT_DLP_PIN
+        ))
+    {
+        println!("cancelled");
+        return Ok(());
+    }
+    let work = dir.join(format!(".setup-ytdlp-{}", std::process::id()));
+    std::fs::create_dir_all(&work)?;
+    let asset_path = work.join(asset);
+    fetch(&asset_path, &url)?;
+    make_executable(&asset_path)?;
+    std::fs::rename(&asset_path, &target)
+        .with_context(|| format!("move into {}", target.display()))?;
+    let _ = std::fs::remove_dir_all(&work);
+    output::print_success(&format!("bundled yt-dlp ready at {}", target.display()));
     Ok(())
 }
 

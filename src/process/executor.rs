@@ -63,6 +63,17 @@ where
     }
 }
 
+fn apply_managed_path(cmd: &mut std::process::Command) {
+    if let Some(dir) = crate::application::backend::managed_dir() {
+        let current = std::env::var_os("PATH").unwrap_or_default();
+        let mut parts = vec![dir];
+        parts.extend(std::env::split_paths(&current));
+        if let Ok(joined) = std::env::join_paths(parts) {
+            cmd.env("PATH", joined);
+        }
+    }
+}
+
 pub struct Executor;
 
 impl Executor {
@@ -111,11 +122,12 @@ impl Executor {
             });
         }
         let out = io_with_retry(|| {
-            Command::new(binary)
-                .args(args)
+            let mut cmd = Command::new(binary);
+            cmd.args(args)
                 .stdout(std::process::Stdio::inherit())
-                .stderr(std::process::Stdio::piped())
-                .output()
+                .stderr(std::process::Stdio::piped());
+            apply_managed_path(&mut cmd);
+            cmd.output()
         })
         .map_err(ScrapmfError::Io)?;
         let status = out.status;
@@ -174,13 +186,12 @@ impl Executor {
             });
         }
 
-        let mut child = spawn_with_retry(
-            Command::new(binary)
-                .args(args)
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped()),
-        )
-        .map_err(ScrapmfError::Io)?;
+        let mut cmd = Command::new(binary);
+        cmd.args(args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        apply_managed_path(&mut cmd);
+        let mut child = spawn_with_retry(&mut cmd).map_err(ScrapmfError::Io)?;
 
         // Drain stderr on a helper thread; forward lines back via channel.
         let stderr = child
@@ -319,8 +330,13 @@ impl Executor {
                 name: binary.to_string(),
             });
         }
-        let output =
-            io_with_retry(|| Command::new(binary).args(args).output()).map_err(ScrapmfError::Io)?;
+        let output = io_with_retry(|| {
+            let mut cmd = Command::new(binary);
+            cmd.args(args);
+            apply_managed_path(&mut cmd);
+            cmd.output()
+        })
+        .map_err(ScrapmfError::Io)?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             let truncated = stderr
