@@ -68,7 +68,7 @@ fn choose_content_kinds(selected: &[(String, String, crate::config::Account)]) -
         // Enter says yes: applying one choice to every account is the expected
         // action, and nothing is destroyed here.
         let same_for_all = match crate::cli::interactive::menu::confirm_back(
-            "Add account",
+            crate::i18n::t("profile_add_account"),
             "Apply the same content selection to all accounts?",
             true,
             false,
@@ -464,7 +464,7 @@ pub(super) fn prompt_scrape_as_profile() {
             }
         }
     }
-    let _ = Text::new("Press enter to continue")
+    let _ = Text::new(&crate::i18n::t("press_enter_to_continue"))
         .with_render_config(render_config())
         .prompt();
 }
@@ -509,7 +509,7 @@ pub(super) fn prompt_new_profile_accounts(name: &str) -> crate::config::Profile 
             });
 
         let more = crate::cli::interactive::menu::confirm_back(
-            "Add account",
+            crate::i18n::t("profile_add_account"),
             crate::i18n::t("add_another_account").as_str(),
             false,
             false,
@@ -541,7 +541,7 @@ pub(super) fn prompt_cookies_choice(
 ) -> (Option<PathBuf>, Option<String>) {
     let mut opts = vec![
         "Default (from site config)".to_string(),
-        "Custom file path".to_string(),
+        crate::i18n::t("profile_custom_file_path").to_string(),
     ];
     let current_desc = current_file.map(|p| p.display().to_string());
     if let Some(ref cur) = current_desc {
@@ -551,7 +551,7 @@ pub(super) fn prompt_cookies_choice(
         Ok(c) => c,
         Err(_) => return (current_file.map(Path::to_path_buf), None),
     };
-    if choice == "Custom file path" {
+    if choice == crate::i18n::t("profile_custom_file_path") {
         if let Some(path_str) = ask_nonempty("Cookies file path (Netscape .txt):") {
             return (Some(PathBuf::from(path_str)), None);
         }
@@ -622,11 +622,11 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
         println!("Profile: {name} — {} account(s)", account_options.len());
         let delete_label = crate::i18n::t("delete_profile");
         let options = vec![
-            "Add account",
-            "Edit account",
-            "Remove account",
-            "Rename display name",
-            "Show summary",
+            crate::i18n::t("profile_add_account"),
+            crate::i18n::t("profile_edit_account"),
+            crate::i18n::t("profile_remove_account"),
+            crate::i18n::t("profile_rename_display_name"),
+            crate::i18n::t("profile_show_summary"),
             "Advanced: open in $EDITOR",
             delete_label.as_str(),
             "Back",
@@ -653,7 +653,7 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                     return;
                 }
             }
-            "Add account" => {
+            "Add account" | "Añadir cuenta" => {
                 let site_opts = site_options_with_fallbacks(&["instagram", "tiktok", "facebook"]);
                 let items: Vec<crate::cli::interactive::theme::SiteItem> = site_opts
                     .into_iter()
@@ -680,7 +680,7 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                     println!("✔ Account added");
                 }
             }
-            "Edit account" => {
+            "Edit account" | "Editar cuenta" => {
                 if account_options.is_empty() {
                     println!("ℹ No accounts to edit");
                     continue;
@@ -743,7 +743,7 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                     println!("✔ Account updated");
                 }
             }
-            "Remove account" => {
+            "Remove account" | "Eliminar cuenta" => {
                 if account_options.is_empty() {
                     println!("ℹ No accounts to remove");
                     continue;
@@ -781,7 +781,7 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                     println!("✔ Account removed");
                 }
             }
-            "Rename display name" => {
+            "Rename display name" | "Renombrar nombre visible" => {
                 let current = profile.display_name.as_deref().unwrap_or("");
                 match Text::new("Display name:").with_default(current).prompt() {
                     Ok(s) => {
@@ -798,7 +798,7 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                     Err(_) => continue,
                 }
             }
-            "Show summary" => {
+            "Show summary" | "Mostrar resumen" => {
                 println!("Profile id : {}", profile.profile.as_deref().unwrap_or("?"));
                 if let Some(ref dn) = profile.display_name {
                     println!("Display    : {dn}");

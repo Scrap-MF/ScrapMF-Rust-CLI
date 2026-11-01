@@ -443,7 +443,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
     let proceed = if tty {
         // Enter is the fast path: the expected action is to continue.
         match crate::cli::interactive::menu::confirm_box(
-            "Download content",
+            crate::i18n::t("download_content"),
             "Proceed?",
             &summary,
             true,
@@ -1298,7 +1298,7 @@ pub(super) fn prompt_quick_scrape() {
             // Rebuilt each time so a step back re-renders the full list.
             let site_list = site_opts_ui(&site_opts);
             let idx =
-                match crate::cli::interactive::menu::pick_single("Download content", site_list) {
+                match crate::cli::interactive::menu::pick_single(crate::i18n::t("download_content"), site_list) {
                     Step::Value(i) => i,
                     // First question of the flow: Esc leaves.
                     Step::Back | Step::Cancel => return,
@@ -1472,7 +1472,7 @@ pub(super) fn prompt_quick_scrape() {
                             crate::output::print_help(
                                 "note: the error stays visible until you press Enter",
                             );
-                            let _ = Text::new("Press Enter to go back")
+                            let _ = Text::new(&crate::i18n::t("press_enter_to_go_back"))
                                 .with_render_config(super::theme::render_config())
                                 .prompt();
                             return;
