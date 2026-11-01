@@ -241,5 +241,16 @@
   "plugins_verifying_chromium": "verifying headless Chromium launch",
   "plugins_threads_enabled": "threads plugin enabled (threadstractormf {pin})",
   "could_not_resolve_id": "could not resolve ID to username: {e} — check the ID and that your {site} session is still valid",
-  "error_stays_visible": "note: the error stays visible until you press Enter"
+  "error_stays_visible": "note: the error stays visible until you press Enter",
+  "no_profiles_yet": "ℹ No profiles yet — create one via Configuration → Manage Profiles",
+  "profile_no_accounts": "ℹ Profile {profile} has no accounts — edit it via Manage Profiles",
+  "sites_not_configured": "ℹ Sites not configured (create via Configuration → Manage Sites): {sites}",
+  "cookie_profiles": "Cookie profiles",
+  "manage_sites": "Manage Sites",
+  "general_settings": "General settings",
+  "config_browser_cookies": "Configuration ─ Browser cookies",
+  "config_general_settings": "Configuration ─ General settings",
+  "config_general_settings_language": "Configuration ─ General settings ─ Language",
+  "config_cookie_capture_browser": "Configuration ─ Cookie capture ─ Browser",
+  "config_cookie_capture_networks": "Configuration ─ Cookie capture ─ Networks"
 }

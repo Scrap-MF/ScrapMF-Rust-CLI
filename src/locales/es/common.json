@@ -48,7 +48,7 @@
   "canceled_warning": "⚠ cancelado",
   "choose_profile": "Elegir perfil",
   "delete_profile": "Eliminar perfil",
-  "manage_profiles": "Gestionar perfiles",
+  "manage_profiles": "Administrar perfiles",
   "add_another_account": "¿Añadir otra cuenta?",
   "doctor_title": "scrapmf doctor — comprobando backends y sistema",
   "create_new_site": "Crear nuevo sitio",
@@ -241,5 +241,16 @@
   "plugins_verifying_chromium": "verificando lanzamiento headless de Chromium",
   "plugins_threads_enabled": "plugin de threads habilitado (threadstractormf {pin})",
   "could_not_resolve_id": "no se pudo resolver el ID a nombre de usuario: {e} — verifica el ID y que tu sesión de {site} siga válida",
-  "error_stays_visible": "nota: el error permanece visible hasta que presiones Enter"
+  "error_stays_visible": "nota: el error permanece visible hasta que presiones Enter",
+  "no_profiles_yet": "ℹ Aún no hay perfiles — crea uno en Configuración → Administrar perfiles",
+  "profile_no_accounts": "ℹ El perfil {profile} no tiene cuentas — edítalo en Administrar perfiles",
+  "sites_not_configured": "ℹ Sitios no configurados (crea en Configuración → Administrar sitios): {sites}",
+  "cookie_profiles": "Perfiles de cookies",
+  "manage_sites": "Administrar sitios",
+  "general_settings": "Configuración general",
+  "config_browser_cookies": "Configuración ─ Cookies del navegador",
+  "config_general_settings": "Configuración ─ Configuración general",
+  "config_general_settings_language": "Configuración ─ Configuración general ─ Idioma",
+  "config_cookie_capture_browser": "Configuración ─ Captura de cookies ─ Navegador",
+  "config_cookie_capture_networks": "Configuración ─ Captura de cookies ─ Redes"
 }

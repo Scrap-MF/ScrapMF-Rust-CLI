@@ -139,7 +139,7 @@ pub(super) fn prompt_scrape_as_profile() {
         .collect();
     profile_names.sort();
     if profile_names.is_empty() {
-        println!("ℹ No profiles yet — create one via Configuration → Manage Profiles");
+        println!("{}", crate::i18n::t("no_profiles_yet"));
         return;
     }
     // First question of this flow: Esc leaves, there is nothing before it.
@@ -165,7 +165,10 @@ pub(super) fn prompt_scrape_as_profile() {
         let mut available_sites: Vec<String> = profile.accounts.keys().cloned().collect();
         available_sites.sort();
         if available_sites.is_empty() {
-            println!("ℹ Profile {profile_choice} has no accounts — edit it via Manage Profiles");
+            println!(
+                "{}",
+                crate::i18n::tf("profile_no_accounts", &[("profile", &profile_choice)])
+            );
             return;
         }
 
@@ -182,8 +185,11 @@ pub(super) fn prompt_scrape_as_profile() {
         }
         if !missing_sites.is_empty() {
             println!(
-                "ℹ Sites not configured (create via Configuration → Manage Sites): {}",
-                missing_sites.join(", ")
+                "{}",
+                crate::i18n::tf(
+                    "sites_not_configured",
+                    &[("sites", &missing_sites.join(", "))]
+                )
             );
         }
 
@@ -201,7 +207,10 @@ pub(super) fn prompt_scrape_as_profile() {
             }
         }
         if flat.is_empty() {
-            println!("ℹ Profile {profile_choice} has no accounts — edit it via Manage Profiles");
+            println!(
+                "{}",
+                crate::i18n::tf("profile_no_accounts", &[("profile", &profile_choice)])
+            );
             return;
         }
 
