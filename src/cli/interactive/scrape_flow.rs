@@ -1297,12 +1297,14 @@ pub(super) fn prompt_quick_scrape() {
         let site_name = loop {
             // Rebuilt each time so a step back re-renders the full list.
             let site_list = site_opts_ui(&site_opts);
-            let idx =
-                match crate::cli::interactive::menu::pick_single(&crate::i18n::t("download_content"), site_list) {
-                    Step::Value(i) => i,
-                    // First question of the flow: Esc leaves.
-                    Step::Back | Step::Cancel => return,
-                };
+            let idx = match crate::cli::interactive::menu::pick_single(
+                &crate::i18n::t("download_content"),
+                site_list,
+            ) {
+                Step::Value(i) => i,
+                // First question of the flow: Esc leaves.
+                Step::Back | Step::Cancel => return,
+            };
             let site = site_opts[idx].clone();
             // Re-ask rather than treat a bare "@" as no answer: previously an
             // input that normalised to empty looked like a step back, so the

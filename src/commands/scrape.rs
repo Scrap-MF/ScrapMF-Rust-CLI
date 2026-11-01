@@ -180,7 +180,10 @@ pub fn run(
         Err(e) => {
             // User abort (Ctrl+C in dashboard): clean message + exit code 130
             // (128+SIGINT convention) so scripts can distinguish it from errors.
-            if e.chain().any(|c| c.to_string().contains(crate::i18n::t("aborted_by_user").as_str())) {
+            if e.chain().any(|c| {
+                c.to_string()
+                    .contains(crate::i18n::t("aborted_by_user").as_str())
+            }) {
                 crate::output::print_note(&crate::i18n::t("cancelled_by_user"));
                 std::process::exit(130);
             }

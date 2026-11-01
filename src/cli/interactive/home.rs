@@ -53,18 +53,26 @@ fn detail_lines(action: Action) -> Vec<String> {
                 String::new(),
                 crate::i18n::t("output_dir_label").replace(
                     "{}",
-                    &crate::config::expand_output_dir(&cfg.general.output_dir).display().to_string(),
+                    &crate::config::expand_output_dir(&cfg.general.output_dir)
+                        .display()
+                        .to_string(),
                 ),
                 format!(
                     "archive    : {}",
-                    if cfg.general.archive { crate::i18n::t("on") } else { crate::i18n::t("off") }
+                    if cfg.general.archive {
+                        crate::i18n::t("on")
+                    } else {
+                        crate::i18n::t("off")
+                    }
                 ),
                 format!(
                     "plugins    : threads {}",
                     match crate::plugins::threads_state() {
                         crate::plugins::PluginState::Enabled(v) => format!("enabled ({v})"),
-                        crate::plugins::PluginState::Disabled => crate::i18n::t("disabled").to_string(),
-                        crate::plugins::PluginState::NotInstalled => crate::i18n::t("not_installed").to_string(),
+                        crate::plugins::PluginState::Disabled =>
+                            crate::i18n::t("disabled").to_string(),
+                        crate::plugins::PluginState::NotInstalled =>
+                            crate::i18n::t("not_installed").to_string(),
                     }
                 ),
                 String::new(),
@@ -84,12 +92,18 @@ fn detail_lines(action: Action) -> Vec<String> {
                         crate::plugins::PluginState::Disabled => {
                             crate::i18n::t("disabled_files_kept").to_string()
                         }
-                        crate::plugins::PluginState::NotInstalled => crate::i18n::t("not_installed").to_string(),
+                        crate::plugins::PluginState::NotInstalled => {
+                            crate::i18n::t("not_installed").to_string()
+                        }
                     },
                     "termux-scan" => match crate::plugins::termux_scan_state() {
                         crate::plugins::PluginState::Enabled(v) => format!("enabled ({v})"),
-                        crate::plugins::PluginState::Disabled => crate::i18n::t("disabled").to_string(),
-                        crate::plugins::PluginState::NotInstalled => crate::i18n::t("not_installed").to_string(),
+                        crate::plugins::PluginState::Disabled => {
+                            crate::i18n::t("disabled").to_string()
+                        }
+                        crate::plugins::PluginState::NotInstalled => {
+                            crate::i18n::t("not_installed").to_string()
+                        }
                     },
                     _ => crate::i18n::t("not_installed").to_string(),
                 };

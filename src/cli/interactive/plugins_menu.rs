@@ -68,7 +68,9 @@ fn plugin_submenu(def: &PluginDef) {
         };
         match choice.as_str() {
             "Back" => return,
-            c if c.starts_with(&crate::i18n::t("enable")) || c.starts_with("Update / reinstall") => {
+            c if c.starts_with(&crate::i18n::t("enable"))
+                || c.starts_with("Update / reinstall") =>
+            {
                 if let Err(e) = plugins::install() {
                     eprintln!("✖ install failed: {e}");
                 } else if matches!(state, PluginState::NotInstalled | PluginState::Disabled) {
@@ -127,28 +129,32 @@ fn termux_scan_submenu(def: &PluginDef) {
         };
         match choice.as_str() {
             "Back" => return,
-            c if c.starts_with(&crate::i18n::t("enable")) => match crate::plugins::set_termux_scan_disabled(false) {
-                Ok(()) => {
-                    if matches!(crate::plugins::termux_scan_state(), PluginState::Enabled(_)) {
-                        println!("✔ Termux MediaScan enabled");
-                    } else {
-                        println!(
-                            "✔ enabled but termux-media-scan not found — install termux:api app + pkg install termux-api, then test"
-                        );
+            c if c.starts_with(&crate::i18n::t("enable")) => {
+                match crate::plugins::set_termux_scan_disabled(false) {
+                    Ok(()) => {
+                        if matches!(crate::plugins::termux_scan_state(), PluginState::Enabled(_)) {
+                            println!("✔ Termux MediaScan enabled");
+                        } else {
+                            println!(
+                                "✔ enabled but termux-media-scan not found — install termux:api app + pkg install termux-api, then test"
+                            );
+                        }
+                        pause();
+                        return;
                     }
-                    pause();
-                    return;
+                    Err(e) => eprintln!("✖ failed: {e}"),
                 }
-                Err(e) => eprintln!("✖ failed: {e}"),
-            },
-            s if s == crate::i18n::t("disable") => match crate::plugins::set_termux_scan_disabled(true) {
-                Ok(()) => {
-                    println!("✔ disabled");
-                    pause();
-                    return;
+            }
+            s if s == crate::i18n::t("disable") => {
+                match crate::plugins::set_termux_scan_disabled(true) {
+                    Ok(()) => {
+                        println!("✔ disabled");
+                        pause();
+                        return;
+                    }
+                    Err(e) => eprintln!("✖ failed: {e}"),
                 }
-                Err(e) => eprintln!("✖ failed: {e}"),
-            },
+            }
             c if c.starts_with("Test scan") => {
                 // Scan the configured output dir — never a hardcoded fallback.
                 let dir = match crate::config::load() {

@@ -423,8 +423,7 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
         if files == 0 {
             out.push(CheckLine {
                 level: Level::Info,
-                text: crate::i18n::t("download_archive_empty")
-                    .to_string(),
+                text: crate::i18n::t("download_archive_empty").to_string(),
             });
         } else {
             out.push(CheckLine {

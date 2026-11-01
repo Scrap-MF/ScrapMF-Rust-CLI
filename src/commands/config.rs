@@ -11,7 +11,10 @@ pub fn run(command: Option<ConfigCommands>) -> Result<()> {
                 anyhow::bail!(crate::i18n::t("cannot_determine_config_path"));
             };
             if !path.exists() {
-                println!("{}", crate::i18n::t("no_config_yet").replace("{}", &path.display().to_string()));
+                println!(
+                    "{}",
+                    crate::i18n::t("no_config_yet").replace("{}", &path.display().to_string())
+                );
                 println!("Run: scrapmf config edit");
                 return Ok(());
             }
@@ -43,7 +46,10 @@ fn edit() -> Result<()> {
     if !path.exists() {
         let cfg = config::Config::default();
         config::save(&cfg).context("create default config")?;
-        println!("{}", crate::i18n::t("created_default_config").replace("{}", &path.display().to_string()));
+        println!(
+            "{}",
+            crate::i18n::t("created_default_config").replace("{}", &path.display().to_string())
+        );
     }
     let editor = std::env::var("EDITOR")
         .or_else(|_| std::env::var("VISUAL"))

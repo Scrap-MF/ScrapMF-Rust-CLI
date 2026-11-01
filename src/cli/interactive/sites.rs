@@ -87,7 +87,10 @@ pub(super) fn configuration_submenu() {
                     ),
                 ],
             )
-            .entry(crate::i18n::t("back"), vec![crate::i18n::t("return_to_main_menu").to_string()])
+            .entry(
+                crate::i18n::t("back"),
+                vec![crate::i18n::t("return_to_main_menu").to_string()],
+            )
             .run();
 
         let choice = match outcome {
@@ -264,7 +267,11 @@ fn general_settings_menu() {
             None => "not set — anonymous".to_string(),
         };
         let options: Vec<String> = vec![
-            format!("{}: {}", crate::i18n::t("output_directory"), cfg.general.output_dir.display()),
+            format!(
+                "{}: {}",
+                crate::i18n::t("output_directory"),
+                cfg.general.output_dir.display()
+            ),
             format!("{}: {browser_label}", crate::i18n::t("browser_cookies")),
             format!("{}: {archive_label}", crate::i18n::t("download_archive")),
             format!("{}: {}", crate::i18n::t("language"), cfg.general.language),
@@ -275,7 +282,8 @@ fn general_settings_menu() {
         let opts: Vec<(String, Vec<String>)> = options
             .iter()
             .map(|o| {
-                let details = if o.starts_with(&format!("{}:", crate::i18n::t("output_directory"))) {
+                let details = if o.starts_with(&format!("{}:", crate::i18n::t("output_directory")))
+                {
                     vec![format!("current: {}", cfg.general.output_dir.display())]
                 } else if o.starts_with(&format!("{}:", crate::i18n::t("browser_cookies"))) {
                     vec![match cfg.general.cookies_from_browser.as_deref() {

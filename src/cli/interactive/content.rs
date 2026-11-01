@@ -637,7 +637,8 @@ mod tests {
             overrides: std::collections::HashMap::new(),
         };
         let body = toml::to_string_pretty(&profile).expect("serialize");
-        let parsed: crate::config::Profile = toml::from_str(&body).unwrap_or_else(|_| panic!("{}", crate::i18n::t("parse_back")));
+        let parsed: crate::config::Profile =
+            toml::from_str(&body).unwrap_or_else(|_| panic!("{}", crate::i18n::t("parse_back")));
         assert_eq!(parsed.profile.as_deref(), Some("example"));
         assert_eq!(parsed.accounts.len(), 2);
         assert_eq!(

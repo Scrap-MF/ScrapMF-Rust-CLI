@@ -331,7 +331,10 @@ where
     let guard = match TerminalGuard::enter() {
         Ok(guard) => guard,
         Err(e) => {
-            eprintln!("{}", crate::i18n::t("tui_error").replace("{e}", &e.to_string()));
+            eprintln!(
+                "{}",
+                crate::i18n::t("tui_error").replace("{e}", &e.to_string())
+            );
             return worker();
         }
     };

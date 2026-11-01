@@ -17,7 +17,10 @@ pub(crate) fn show() {
     let guard = match TerminalGuard::enter() {
         Ok(g) => g,
         Err(e) => {
-            eprintln!("{}", crate::i18n::t("tui_error").replace("{e}", &e.to_string()));
+            eprintln!(
+                "{}",
+                crate::i18n::t("tui_error").replace("{e}", &e.to_string())
+            );
             // Fallback: plain CLI output
             let _ = crate::commands::doctor::run(1);
             return;
