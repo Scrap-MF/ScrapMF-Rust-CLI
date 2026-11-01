@@ -2,7 +2,6 @@ use std::io::Write;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use sha2::Digest;
 
 use crate::application::backend::{self, GALLERY_DL_PIN};
 use crate::{config, output};
@@ -67,11 +66,8 @@ pub fn run(yes: bool) -> Result<()> {
     let gd_result = if backend::is_dev_pin() {
         install_via_python(yes);
         Ok(())
-    } else if std::env::consts::ARCH == "x86_64" || cfg!(windows) {
-        install_managed(yes)
     } else {
-        install_via_python(yes);
-        Ok(())
+        install_managed_venv(yes)
     };
 
     // Also ensure the managed (pinned) yt-dlp backend is present so gallery-dl's
@@ -155,7 +151,7 @@ fn install_via_python(yes: bool) {
     println!("→ {cmd}");
 
     if !yes && !confirm("Run this now?") {
-        println!("{}", crate::i18n::t("cancelled_run_manually"));
+        println!("cancelled — run it manually whenever you like");
         return;
     }
 
@@ -228,8 +224,8 @@ fn verify_system_install() {
 
 fn print_python_fallback() {
     let pin = backend::GALLERY_DL_PIN;
-    if backend::is_dev_pin() {
-        output::print_note("no pip/pipx found — install Python and git, then the dev backend:");
+    if backend::GALLERY_DL_USE_PYTHON_BACKEND || backend::is_dev_pin() {
+        output::print_note("no pip/pipx found — install Python first, then the backend:");
         println!("  # Termux:");
         println!("  pkg install python git");
         println!("  # other:");
@@ -256,57 +252,69 @@ fn print_python_fallback() {
     output::print_info("  pipx never auto-upgrades it, so the version stays frozen.");
 }
 
-fn install_managed(yes: bool) -> Result<()> {
-    let dir = backend::managed_dir().context("cannot determine data directory")?;
-    std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
-    }
+/// Install gallery-dl into a ScrapMF-managed Python venv.
+///
+/// This creates an isolated venv under `$XDG_DATA_HOME/scrapmf/venv` and
+/// installs the pinned gallery-dl version into it. The venv uses the host's
+/// Python (modern OpenSSL), so the resulting binary has a TLS fingerprint
+/// that passes Cloudflare's checks.
+fn install_managed_venv(yes: bool) -> Result<()> {
+    let venv = backend::managed_venv_dir().context("cannot determine data directory")?;
+    let python = if cfg!(windows) { "python" } else { "python3" };
+    let venv_python = if cfg!(windows) {
+        venv.join("Scripts").join("python.exe")
+    } else {
+        venv.join("bin").join("python3")
+    };
+    let venv_gdl = if cfg!(windows) {
+        venv.join("Scripts").join("gallery-dl.exe")
+    } else {
+        venv.join("bin").join("gallery-dl")
+    };
 
-    let asset = backend::gallery_dl_asset();
-    let url = format!("{}/{}", backend::release_base_url(), asset);
-    println!("→ Installing bundled gallery-dl v{GALLERY_DL_PIN} (~23 MB download)");
-    if !yes
-        && !confirm(&format!(
-            "Download and install gallery-dl v{GALLERY_DL_PIN} now?"
-        ))
-    {
-        println!("{}", crate::i18n::t("cancelled"));
+    if venv_gdl.is_file() {
+        output::print_success(&format!(
+            "managed gallery-dl venv already installed at {}",
+            venv_gdl.display()
+        ));
         return Ok(());
     }
 
-    let work = dir.join(format!(".setup-{}", std::process::id()));
-    std::fs::create_dir_all(&work)?;
-    let asset_path = work.join(asset);
-    let sums_path = work.join("SHA256SUMS");
+    std::fs::create_dir_all(&venv).with_context(|| format!("create {}", venv.display()))?;
 
-    fetch(&asset_path, &url)?;
-    fetch(
-        &sums_path,
-        &format!("{}/SHA256SUMS", backend::release_base_url()),
-    )?;
+    println!("→ Creating Python venv at {}", venv.display());
+    if !yes && !confirm("Create venv and install gallery-dl now?") {
+        println!("cancelled");
+        return Ok(());
+    }
 
-    echo_step("Verifying SHA256 checksum");
-    let sums = std::fs::read_to_string(&sums_path).context("read SHA256SUMS")?;
-    let expected = backend::extract_sha256_for(&sums, asset).context(format!(
-        "{asset} not listed in official SHA256SUMS — aborting"
-    ))?;
-    verify_sha256(&asset_path, &expected)?;
+    let status = std::process::Command::new(python)
+        .args(["-m", "venv", &venv.to_string_lossy()])
+        .status()
+        .with_context(|| format!("create venv at {}", venv.display()))?;
+    if !status.success() {
+        anyhow::bail!("failed to create Python venv");
+    }
 
-    let target = dir.join(backend::managed_binary_name());
-    make_executable(&asset_path)?;
-    std::fs::rename(&asset_path, &target)
-        .with_context(|| format!("move into {}", target.display()))?;
-    let _ = std::fs::remove_dir_all(&work);
+    let pin = backend::GALLERY_DL_PIN;
+    let spec = format!("gallery-dl=={pin}");
+    println!("→ Installing gallery-dl v{pin} into venv");
+    let status = std::process::Command::new(&venv_python)
+        .args(["-m", "pip", "install", "--quiet", &spec])
+        .status()
+        .with_context(|| format!("pip install in {}", venv.display()))?;
+    if !status.success() {
+        anyhow::bail!("failed to install gallery-dl into venv");
+    }
 
-    output::print_success(&format!(
-        "bundled gallery-dl v{GALLERY_DL_PIN} ready at {}",
-        target.display()
-    ));
-    output::print_info("  It never updates on its own; new pins ship with scrapmf releases.");
-    print_version(&target);
+    if venv_gdl.is_file() {
+        output::print_success(&format!(
+            "managed gallery-dl v{pin} ready at {}",
+            venv_gdl.display()
+        ));
+    } else {
+        output::print_error("venv created but gallery-dl binary not found");
+    }
     Ok(())
 }
 
@@ -336,7 +344,7 @@ fn install_yt_dlp_managed(yes: bool) -> Result<()> {
             backend::YT_DLP_PIN
         ))
     {
-        println!("{}", crate::i18n::t("cancelled"));
+        println!("cancelled");
         return Ok(());
     }
     let work = dir.join(format!(".setup-ytdlp-{}", std::process::id()));
@@ -371,19 +379,6 @@ fn installed_version(path: &Path) -> Option<String> {
         .then_some(token)
 }
 
-fn print_version(path: &Path) {
-    match crate::process::Executor::run_capturing(
-        &path.to_string_lossy(),
-        &[std::ffi::OsString::from("--version")],
-    ) {
-        Ok(out) => {
-            let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            output::print_success(&format!("gallery-dl {v} verified working"));
-        }
-        Err(e) => tracing::warn!(error = %e, "could not verify installed binary"),
-    }
-}
-
 /// First-run interactive offer: called from main before entering interactive
 /// mode. Never prompts outside a TTY; respects auto_install_backends.
 pub fn offer_if_missing() {
@@ -399,8 +394,6 @@ pub fn offer_if_missing() {
         let _ = run(false); // confirm prompt inside; cancellation is non-fatal
     }
 }
-
-// --- helpers -----------------------------------------------------------------
 
 fn echo_step(msg: &str) {
     println!("→ {msg}");
@@ -432,28 +425,6 @@ fn fetch(dest: &Path, url: &str) -> Result<()> {
 }
 
 /// Compute SHA-256 in Rust — no external tools needed, works on Windows too.
-fn verify_sha256(file: &Path, expected_hex: &str) -> Result<()> {
-    use std::io::Read;
-    let mut f = std::fs::File::open(file).with_context(|| format!("open {}", file.display()))?;
-    let mut hasher = sha2::Sha256::new();
-    let mut buf = [0u8; 64 * 1024];
-    loop {
-        let n = f.read(&mut buf).context("read file for hashing")?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-    }
-    let got: String = format!("{:x}", hasher.finalize());
-    if got != expected_hex.to_ascii_lowercase() {
-        anyhow::bail!(
-            "checksum mismatch for {}: expected {expected_hex}, got {got}",
-            file.display()
-        );
-    }
-    Ok(())
-}
-
 fn make_executable(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
