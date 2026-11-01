@@ -89,7 +89,7 @@ const PROTECTED_ROOTS: &[&str] = &[
 pub fn validate_output_path(path: &std::path::Path) -> anyhow::Result<()> {
     use std::path::{Component, Path};
     if path.as_os_str().is_empty() {
-        anyhow::bail!("output path is empty");
+        anyhow::bail!("{}", crate::i18n::t("scraper_output_path_empty"));
     }
     // Expanded through the shared helper, not an inline copy: validating the
     // raw string would let `$HOME/etc` pass the `/etc` protection below, since
@@ -106,8 +106,11 @@ pub fn validate_output_path(path: &std::path::Path) -> anyhow::Result<()> {
         };
         if protected {
             anyhow::bail!(
-                "output path '{}' is inside protected system directory '{root}'",
-                path.display()
+                "{}",
+                crate::i18n::tf(
+                    "scraper_output_path_protected",
+                    &[("path", &path.display().to_string()), ("root", root)],
+                )
             );
         }
     }
@@ -146,10 +149,13 @@ const ALLOW_LIST: &[&str] = &[
 pub fn validate_extra_args(args: &[String]) -> anyhow::Result<()> {
     for arg in args {
         if arg.contains([';', '|', '&', '$', '>', '<', '`']) {
-            anyhow::bail!("extra_args contains forbidden chars in '{arg}'");
+            anyhow::bail!(
+                "{}",
+                crate::i18n::tf("scraper_extra_args_forbidden_chars", &[("arg", arg)])
+            );
         }
         if arg == "--exec" || arg.starts_with("--exec=") {
-            anyhow::bail!("extra_args forbidden flag '--exec'");
+            anyhow::bail!("{}", crate::i18n::t("scraper_extra_args_exec_forbidden"));
         }
         if arg.starts_with("--") {
             let allowed = ALLOW_LIST
@@ -157,8 +163,11 @@ pub fn validate_extra_args(args: &[String]) -> anyhow::Result<()> {
                 .any(|allow| arg == *allow || arg.starts_with(&format!("{allow}=")));
             if !allowed {
                 anyhow::bail!(
-                    "extra_args forbidden flag '{arg}' (allowed: {})",
-                    ALLOW_LIST.join(", ")
+                    "{}",
+                    crate::i18n::tf(
+                        "scraper_extra_args_forbidden_flag",
+                        &[("arg", arg), ("allowed", &ALLOW_LIST.join(", "))],
+                    )
                 );
             }
         }
@@ -168,12 +177,24 @@ pub fn validate_extra_args(args: &[String]) -> anyhow::Result<()> {
 
 pub fn validate_cookies_file(path: &std::path::Path) -> anyhow::Result<()> {
     if !path.is_file() {
-        anyhow::bail!("cookies file '{}' not found or not a file", path.display());
+        anyhow::bail!(
+            "{}",
+            crate::i18n::tf(
+                "scraper_cookies_file_not_found",
+                &[("path", &path.display().to_string())]
+            )
+        );
     }
     // Check readable and not world-readable is optional warn, but check exists
     let md = std::fs::metadata(path)?;
     if md.len() == 0 {
-        anyhow::bail!("cookies file '{}' is empty", path.display());
+        anyhow::bail!(
+            "{}",
+            crate::i18n::tf(
+                "scraper_cookies_file_empty",
+                &[("path", &path.display().to_string())]
+            )
+        );
     }
     Ok(())
 }
@@ -190,8 +211,11 @@ pub fn validate_cookies_browser(browser: &str) -> anyhow::Result<()> {
     let allowed: Vec<&str> = crate::browsers::CHANNELS.iter().map(|c| c.id).collect();
     if !allowed.contains(&id) {
         anyhow::bail!(
-            "unsupported browser '{id}' for --cookies-from-browser (allowed: {})",
-            allowed.join(", ")
+            "{}",
+            crate::i18n::tf(
+                "scraper_unsupported_browser",
+                &[("id", id), ("allowed", &allowed.join(", "))],
+            )
         );
     }
     Ok(())
@@ -549,13 +573,16 @@ pub fn scrape_with_hooks(
     }
     if outcome.success_count == 0 && outcome.failed.is_empty() && outcome.skipped.is_empty() {
         // No sub-url succeeded and none reported — treat as overall failure
-        anyhow::bail!("all sub-extractors failed or were skipped");
+        anyhow::bail!("{}", crate::i18n::t("scraper_all_subextractors_failed"));
     }
     // If at least one succeeded, return outcome even if some failed/skipped
     if outcome.success_count == 0 && !outcome.failed.is_empty() {
         // All failed (no skipped) → propagate error
         let details = outcome.failed.join("; ");
-        anyhow::bail!("scrape failed: {details}");
+        anyhow::bail!(
+            "{}",
+            crate::i18n::tf("scraper_scrape_failed", &[("details", &details)])
+        );
     }
 
     // Drain the store the provider actually wrote: keys gallery-dl inserted
@@ -971,9 +998,11 @@ fn run_one_sub_scrape_impl(
     let is_threads = is_threads_url(url);
     if is_threads && !crate::plugins::threads_enabled() {
         anyhow::bail!(
-            "threads plugin is not enabled — this URL needs it. \
-             Enable via scrapmf → Plugins (installs threadstractormf {})",
-            crate::plugins::THREADSTRACTOR_PIN
+            "{}",
+            crate::i18n::tf(
+                "scraper_threads_plugin_not_enabled",
+                &[("pin", crate::plugins::THREADSTRACTOR_PIN)],
+            )
         );
     }
     let (binary, mut args) = if is_threads {

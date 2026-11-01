@@ -133,7 +133,10 @@ fn log_window<'a>(logs: &'a [&'a String], scroll: usize, rows: usize) -> &'a [&'
 /// One rendered job row (pure — unit-testable).
 fn job_line(job: &JobRow, index: usize, total: usize) -> String {
     let files = if matches!(job.state, JobState::Running | JobState::Done(_)) {
-        format!(" · {} archivos", job.files)
+        format!(
+            " · {}",
+            crate::i18n::tf("dashboard_files", &[("n", &job.files.to_string())])
+        )
     } else {
         String::new()
     };
@@ -240,9 +243,9 @@ fn draw(
     }
     if finished {
         let (msg, color) = if cancelled {
-            ("⚠ Cancelled — press Enter to go back", Color::Yellow)
+            (crate::i18n::t("dashboard_cancelled_prompt"), Color::Yellow)
         } else {
-            ("✔ Done — press Enter to go back", Color::Green)
+            (crate::i18n::t("dashboard_done_prompt"), Color::Green)
         };
         lines.push(Line::styled(
             msg,

@@ -15,7 +15,7 @@ pub fn run(command: Option<ConfigCommands>) -> Result<()> {
                     "{}",
                     crate::i18n::t("no_config_yet").replace("{}", &path.display().to_string())
                 );
-                println!("Run: scrapmf config edit");
+                println!("{}", crate::i18n::t("run_config_edit"));
                 return Ok(());
             }
             let content = std::fs::read_to_string(&path)
@@ -55,14 +55,23 @@ fn edit() -> Result<()> {
         .or_else(|_| std::env::var("VISUAL"))
         .unwrap_or_else(|_| "vi".to_string());
     if which::which(&editor).is_err() {
-        anyhow::bail!("editor '{editor}' not found in $PATH");
+        anyhow::bail!(
+            "{}",
+            crate::i18n::tf("editor_not_found", &[("editor", &editor)])
+        );
     }
     let status = std::process::Command::new(&editor)
         .arg(&path)
         .status()
         .with_context(|| format!("launch editor {editor}"))?;
     if !status.success() {
-        anyhow::bail!("editor exited with {:?}", status.code());
+        anyhow::bail!(
+            "{}",
+            crate::i18n::tf(
+                "editor_exited",
+                &[("code", &format!("{:?}", status.code()))]
+            )
+        );
     }
     // Validate after edit
     let s = std::fs::read_to_string(&path).context("read after edit")?;
@@ -77,7 +86,7 @@ fn interactive() -> Result<()> {
     let edit_label = crate::i18n::t("edit_manually");
     let exit_label = crate::i18n::t("exit");
     let options = vec![
-        "Default output directory".to_string(),
+        crate::i18n::t("default_output_directory").to_string(),
         show_label.clone(),
         edit_label.clone(),
         exit_label.clone(),
@@ -87,9 +96,9 @@ fn interactive() -> Result<()> {
         .unwrap_or(exit_label.clone());
 
     match choice.as_str() {
-        "Default output directory" => {
+        s if s == crate::i18n::t("default_output_directory") => {
             let current = cfg.general.output_dir.display().to_string();
-            let dir = Text::new("Default output directory:")
+            let dir = Text::new(&crate::i18n::t("default_output_directory_prompt"))
                 .with_default(&current)
                 .prompt()
                 .context("output dir")?;

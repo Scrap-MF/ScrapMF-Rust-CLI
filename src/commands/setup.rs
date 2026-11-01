@@ -23,9 +23,9 @@ pub fn run(yes: bool) -> Result<()> {
     if let backend::Source::Managed(p) = &source {
         let installed = installed_version(p);
         if installed.as_deref() == Some(GALLERY_DL_PIN) {
-            output::print_success(&format!(
-                "bundled gallery-dl v{GALLERY_DL_PIN} already installed at {}",
-                p.display()
+            output::print_success(&crate::i18n::tf(
+                "setup_bundled_gdl_already_installed",
+                &[("path", &p.display().to_string())],
             ));
             return Ok(());
         }
@@ -39,24 +39,28 @@ pub fn run(yes: bool) -> Result<()> {
             Some(v) => (v, "older"),
             None => ("unreadable".to_string(), "unknown"),
         };
-        output::print_info(&format!(
-            "installed gallery-dl is {installed_str}, pinned build is {GALLERY_DL_PIN}"
+        output::print_info(&crate::i18n::tf(
+            "setup_installed_gdl_version",
+            &[("installed", &installed_str), ("pin", GALLERY_DL_PIN)],
         ));
-        output::print_info(&format!(
-            "replacing the managed copy ({kind} than the pin) — the pin follows \
-             scrapmf's release, so this is expected after an update"
+        output::print_info(&crate::i18n::tf(
+            "setup_replacing_managed_copy",
+            &[("kind", kind)],
         ));
     }
-    output::print_info(&format!(
-        "Current resolution: {}",
-        match &source {
-            backend::Source::Missing => "no gallery-dl found".to_string(),
-            s => format!(
-                "{} ({})",
-                s.path().unwrap_or(std::path::Path::new("?")).display(),
-                s.label()
-            ),
-        }
+    output::print_info(&crate::i18n::tf(
+        "setup_current_resolution",
+        &[(
+            "value",
+            &match &source {
+                backend::Source::Missing => crate::i18n::t("setup_no_gallery_dl_found"),
+                s => format!(
+                    "{} ({})",
+                    s.path().unwrap_or(std::path::Path::new("?")).display(),
+                    s.label()
+                ),
+            },
+        )],
     ));
 
     // Dev pins have no official standalone build → always install from source.
@@ -135,9 +139,13 @@ fn install_via_python(yes: bool) {
         (format!("gallery-dl=={pin}"), "pinned")
     };
 
-    output::print_info(&format!(
-        "installing {label} gallery-dl v{pin} via Python ({} )",
-        std::env::consts::ARCH
+    output::print_info(&crate::i18n::tf(
+        "setup_installing_via_python",
+        &[
+            ("label", label),
+            ("pin", pin),
+            ("arch", std::env::consts::ARCH),
+        ],
     ));
     let choice = &candidates[0];
     let mut cmd = String::new();
@@ -148,10 +156,10 @@ fn install_via_python(yes: bool) {
         cmd.push_str(part);
     }
     cmd.push_str(&format!(" install {spec}"));
-    println!("→ {cmd}");
+    println!("{}", crate::i18n::tf("setup_run_command", &[("cmd", &cmd)]));
 
     if !yes && !confirm("Run this now?") {
-        println!("cancelled — run it manually whenever you like");
+        println!("{}", crate::i18n::t("cancelled_run_manually"));
         return;
     }
 
@@ -170,16 +178,18 @@ fn install_via_python(yes: bool) {
             let stderr = String::from_utf8_lossy(&out.stderr);
             let stderr = stderr.lines().rev().take(10).collect::<Vec<_>>();
             let stderr = stderr.into_iter().rev().collect::<Vec<_>>().join("\n");
-            output::print_error(&format!(
-                "{} install failed:\n{}",
-                choice.label,
-                stderr.trim()
+            output::print_error(&crate::i18n::tf(
+                "setup_install_failed",
+                &[("label", choice.label), ("stderr", stderr.trim())],
             ));
             print_python_fallback();
             return;
         }
         Err(e) => {
-            output::print_error(&format!("could not launch {}: {e}", choice.label));
+            output::print_error(&crate::i18n::tf(
+                "setup_could_not_launch",
+                &[("label", choice.label), ("e", &e.to_string())],
+            ));
             print_python_fallback();
             return;
         }
@@ -201,23 +211,17 @@ fn verify_system_install() {
             ) {
                 Ok(out) => {
                     let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                    output::print_success(&format!(
-                        "gallery-dl {v} verified working at {}",
-                        path.display()
+                    output::print_success(&crate::i18n::tf(
+                        "setup_gdl_verified",
+                        &[("v", &v), ("path", &path.display().to_string())],
                     ));
                 }
                 Err(e) => tracing::warn!(error = %e, "installed binary did not report a version"),
             }
-            output::print_note(
-                "installed via pip/pipx: scrapmf sees it as system (NOT pinned). \
-                 Avoid upgrading it manually; new pins ship with scrapmf releases.",
-            );
+            output::print_note(&crate::i18n::t("setup_installed_via_pip_note"));
         }
         _ => {
-            output::print_note(
-                "install finished but 'gallery-dl' is still not on $PATH — \
-                 open a new shell or add its bin dir to PATH.",
-            );
+            output::print_note(&crate::i18n::t("setup_not_on_path"));
         }
     }
 }
@@ -225,7 +229,7 @@ fn verify_system_install() {
 fn print_python_fallback() {
     let pin = backend::GALLERY_DL_PIN;
     if backend::GALLERY_DL_USE_PYTHON_BACKEND || backend::is_dev_pin() {
-        output::print_note("no pip/pipx found — install Python first, then the backend:");
+        output::print_note(&crate::i18n::t("setup_no_pip_python_first"));
         println!("  # Termux:");
         println!("  pkg install python git");
         println!("  # other:");
@@ -236,20 +240,16 @@ fn print_python_fallback() {
         return;
     }
     if is_termux() {
-        output::print_note(
-            "no pip/pipx found — on Termux install Python first, then the pinned backend:",
-        );
+        output::print_note(&crate::i18n::t("setup_no_pip_termux"));
         println!("  pkg install python");
         println!("  python3 -m pip install gallery-dl=={pin}");
     } else {
-        output::print_note(
-            "no pipx or python3 found — install one of them, then the pinned version:",
-        );
+        output::print_note(&crate::i18n::t("setup_no_pip_pipx"));
         println!("  pipx install gallery-dl=={pin}");
         println!("  # or:");
         println!("  python3 -m pip install gallery-dl=={pin}");
     }
-    output::print_info("  pipx never auto-upgrades it, so the version stays frozen.");
+    output::print_info(&crate::i18n::t("setup_pipx_never_upgrades"));
 }
 
 /// Install gallery-dl into a ScrapMF-managed Python venv.
@@ -273,18 +273,24 @@ fn install_managed_venv(yes: bool) -> Result<()> {
     };
 
     if venv_gdl.is_file() {
-        output::print_success(&format!(
-            "managed gallery-dl venv already installed at {}",
-            venv_gdl.display()
+        output::print_success(&crate::i18n::tf(
+            "setup_managed_venv_already_installed",
+            &[("path", &venv_gdl.display().to_string())],
         ));
         return Ok(());
     }
 
     std::fs::create_dir_all(&venv).with_context(|| format!("create {}", venv.display()))?;
 
-    println!("→ Creating Python venv at {}", venv.display());
+    println!(
+        "{}",
+        crate::i18n::tf(
+            "setup_creating_venv",
+            &[("path", &venv.display().to_string())]
+        )
+    );
     if !yes && !confirm("Create venv and install gallery-dl now?") {
-        println!("cancelled");
+        println!("{}", crate::i18n::t("cancelled"));
         return Ok(());
     }
 
@@ -293,27 +299,30 @@ fn install_managed_venv(yes: bool) -> Result<()> {
         .status()
         .with_context(|| format!("create venv at {}", venv.display()))?;
     if !status.success() {
-        anyhow::bail!("failed to create Python venv");
+        anyhow::bail!("{}", crate::i18n::t("setup_failed_create_venv"));
     }
 
     let pin = backend::GALLERY_DL_PIN;
     let spec = format!("gallery-dl=={pin}");
-    println!("→ Installing gallery-dl v{pin} into venv");
+    println!(
+        "{}",
+        crate::i18n::tf("setup_installing_into_venv", &[("pin", pin)])
+    );
     let status = std::process::Command::new(&venv_python)
         .args(["-m", "pip", "install", "--quiet", &spec])
         .status()
         .with_context(|| format!("pip install in {}", venv.display()))?;
     if !status.success() {
-        anyhow::bail!("failed to install gallery-dl into venv");
+        anyhow::bail!("{}", crate::i18n::t("setup_failed_install_venv"));
     }
 
     if venv_gdl.is_file() {
-        output::print_success(&format!(
-            "managed gallery-dl v{pin} ready at {}",
-            venv_gdl.display()
+        output::print_success(&crate::i18n::tf(
+            "setup_managed_gdl_ready",
+            &[("pin", pin), ("path", &venv_gdl.display().to_string())],
         ));
     } else {
-        output::print_error("venv created but gallery-dl binary not found");
+        output::print_error(&crate::i18n::t("setup_venv_no_binary"));
     }
     Ok(())
 }
@@ -327,24 +336,24 @@ fn install_yt_dlp_managed(yes: bool) -> Result<()> {
     let target = dir.join(asset);
     if target.is_file() {
         // Already present — keep it (pinned by scrapmf release).
-        output::print_success(&format!(
-            "bundled yt-dlp already installed at {}",
-            target.display()
+        output::print_success(&crate::i18n::tf(
+            "setup_ytdlp_already_installed",
+            &[("path", &target.display().to_string())],
         ));
         return Ok(());
     }
     let url = format!("{}/{}", backend::yt_dlp_release_base_url(), asset);
     println!(
-        "→ Installing bundled yt-dlp v{} (~? MB download)",
-        backend::YT_DLP_PIN
+        "{}",
+        crate::i18n::tf("setup_installing_ytdlp", &[("pin", backend::YT_DLP_PIN)])
     );
     if !yes
-        && !confirm(&format!(
-            "Download and install yt-dlp v{} now?",
-            backend::YT_DLP_PIN
+        && !confirm(&crate::i18n::tf(
+            "setup_download_ytdlp_now",
+            &[("pin", backend::YT_DLP_PIN)],
         ))
     {
-        println!("cancelled");
+        println!("{}", crate::i18n::t("cancelled"));
         return Ok(());
     }
     let work = dir.join(format!(".setup-ytdlp-{}", std::process::id()));
@@ -355,7 +364,10 @@ fn install_yt_dlp_managed(yes: bool) -> Result<()> {
     std::fs::rename(&asset_path, &target)
         .with_context(|| format!("move into {}", target.display()))?;
     let _ = std::fs::remove_dir_all(&work);
-    output::print_success(&format!("bundled yt-dlp ready at {}", target.display()));
+    output::print_success(&crate::i18n::tf(
+        "setup_ytdlp_ready",
+        &[("path", &target.display().to_string())],
+    ));
     Ok(())
 }
 
@@ -400,7 +412,7 @@ fn echo_step(msg: &str) {
 }
 
 fn fetch(dest: &Path, url: &str) -> Result<()> {
-    echo_step(&format!("Downloading {url}"));
+    echo_step(&crate::i18n::tf("setup_downloading", &[("url", url)]));
     let status = if command_exists("curl") {
         std::process::Command::new("curl")
             .args(["-fsSL", "-o"])
@@ -416,10 +428,13 @@ fn fetch(dest: &Path, url: &str) -> Result<()> {
             .status()
             .context("launch wget")?
     } else {
-        anyhow::bail!("curl or wget required to download the backend");
+        anyhow::bail!("{}", crate::i18n::t("setup_curl_wget_required"));
     };
     if !status.success() {
-        anyhow::bail!("download failed ({url})");
+        anyhow::bail!(
+            "{}",
+            crate::i18n::tf("setup_download_failed", &[("url", url)])
+        );
     }
     Ok(())
 }
@@ -444,7 +459,10 @@ fn confirm(question: &str) -> bool {
     use std::io::IsTerminal;
     if !std::io::stdin().is_terminal() {
         // Non-interactive: never escalate or download without explicit --yes
-        output::print_note(&format!("{question} Use 'scrapmf setup --yes' to proceed."));
+        output::print_note(&crate::i18n::tf(
+            "setup_question_yes",
+            &[("question", question)],
+        ));
         return false;
     }
     print!("{question} [Y/n] ");

@@ -131,34 +131,53 @@ pub fn run(
     // Request summary only when useful: dry-run or verbose.
     // Cookie file paths are never printed without explicit verbosity.
     if dry_run || verbose > 0 {
-        crate::output::print_info(&format!("Would scrape: {}", req.url));
+        crate::output::print_info(&crate::i18n::tf(
+            "scrape_would_scrape",
+            &[("url", &req.url)],
+        ));
         if let Some(out) = effective_output.clone() {
-            crate::output::print_info(&format!("Output: {}", out.display()));
+            crate::output::print_info(&crate::i18n::tf(
+                "scrape_output",
+                &[("path", &out.display().to_string())],
+            ));
         }
         if let Some(p) = preset.clone() {
-            crate::output::print_info(&format!("Preset: {p}"));
+            crate::output::print_info(&crate::i18n::tf("scrape_preset", &[("p", &p)]));
         }
         if verbose > 0 {
             if let Some(ref c) = cookies {
-                crate::output::print_info(&format!("Cookies: {}", c.display()));
+                crate::output::print_info(&crate::i18n::tf(
+                    "scrape_cookies",
+                    &[("path", &c.display().to_string())],
+                ));
             }
             if let Some(ref b) = cookies_from_browser {
-                crate::output::print_info(&format!("Cookies from browser: {b}"));
+                crate::output::print_info(&crate::i18n::tf(
+                    "scrape_cookies_from_browser",
+                    &[("b", b)],
+                ));
             }
         }
         tracing::debug!(args = ?args, "provider args");
         if verbose > 1 {
-            crate::output::print_info(&format!("Args preview: {:?}", args));
+            crate::output::print_info(&crate::i18n::tf(
+                "scrape_args_preview",
+                &[("args", &format!("{:?}", args))],
+            ));
         }
         if dry_run {
             crate::output::print_note(&crate::i18n::t("dry_run_no_download"));
         }
     }
 
-    crate::output::print_info(&format!(
-        "Provider: {} ({}available)",
-        provider.name(),
-        if provider.is_available() { "" } else { "not " }
+    let status = if provider.is_available() {
+        crate::i18n::t("available")
+    } else {
+        crate::i18n::t("not_available")
+    };
+    crate::output::print_info(&crate::i18n::tf(
+        "scrape_provider",
+        &[("name", provider.name()), ("status", &status)],
     ));
 
     // 6. Execute real (Phase 4)
@@ -169,9 +188,9 @@ pub fn run(
     );
     if dry_run {
         // For dry-run, add --get-urls and execute to list URLs
-        println!("→ Executing dry-run (gallery-dl --get-urls)...");
+        println!("{}", crate::i18n::t("scrape_executing_dry_run"));
     } else {
-        println!("→ Executing gallery-dl...");
+        println!("{}", crate::i18n::t("scrape_executing_gallery_dl"));
     }
 
     let downloaded: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
@@ -216,32 +235,33 @@ pub fn run(
     }
 
     if !outcome.skipped.is_empty() {
-        crate::output::print_note(&format!(
-            "{} sub-extractor(s) skipped (auth/unsupported):",
-            outcome.skipped.len()
+        crate::output::print_note(&crate::i18n::tf(
+            "scrape_subextractors_skipped",
+            &[("n", &outcome.skipped.len().to_string())],
         ));
         for s in &outcome.skipped {
             println!("  - {s}");
         }
     }
     if !outcome.failed.is_empty() {
-        crate::output::print_error(&format!(
-            "{} sub-extractor(s) failed:",
-            outcome.failed.len()
+        crate::output::print_error(&crate::i18n::tf(
+            "scrape_subextractors_failed",
+            &[("n", &outcome.failed.len().to_string())],
         ));
         for f in &outcome.failed {
             println!("  - {f}");
         }
     }
-    crate::output::print_success(&format!("Done ({} sub-extractors)", outcome.success_count));
+    crate::output::print_success(&crate::i18n::tf(
+        "scrape_done_subextractors",
+        &[("n", &outcome.success_count.to_string())],
+    ));
 
     // Actionable hint when posts were lost to anti-bot challenges
     if outcome.challenge_failures > 0 {
-        crate::output::print_note(&format!(
-            "{} post(s) failed due to TikTok JavaScript challenges — your browser session \
-             is likely stale. Open tiktok.com in your configured browser, browse a bit, \
-             then re-run to fetch the missing posts",
-            outcome.challenge_failures
+        crate::output::print_note(&crate::i18n::tf(
+            "scrape_tiktok_challenge_failures",
+            &[("n", &outcome.challenge_failures.to_string())],
         ));
     }
 
@@ -300,7 +320,13 @@ fn run_scrape(
         let status = crate::application::runlog::status_line(&result);
         runlog.borrow_mut().finish(&status);
         if failed {
-            eprintln!("log: {}", runlog.borrow().path.display());
+            eprintln!(
+                "{}",
+                crate::i18n::tf(
+                    "scrape_log_path",
+                    &[("path", &runlog.borrow().path.display().to_string())]
+                )
+            );
         }
         result
     } else {
@@ -331,40 +357,37 @@ fn report_integrity(
     let (delete, leave, unknown) = crate::application::integrity::partition_by_remedy(issues);
 
     if !delete.is_empty() {
-        crate::output::print_error(&format!(
-            "{} downloaded file(s) look incomplete:",
-            delete.len()
+        crate::output::print_error(&crate::i18n::tf(
+            "scrape_downloaded_incomplete",
+            &[("n", &delete.len().to_string())],
         ));
         for (path, issue) in &delete {
             println!("  - {} ({})", path.display(), issue.description());
         }
-        crate::output::print_note(
-            "delete the file(s) above and re-run — deterministic filenames re-download only what is missing",
-        );
+        crate::output::print_note(&crate::i18n::t("scrape_delete_and_rerun"));
     }
 
     if !leave.is_empty() {
         // Info, not error: nothing is wrong with these files.
-        crate::output::print_info(&format!(
-            "{} file(s) downloaded fine but use an uncommon codec:",
-            leave.len()
+        crate::output::print_info(&crate::i18n::tf(
+            "scrape_downloaded_uncommon_codec",
+            &[("n", &leave.len().to_string())],
         ));
         for (path, issue) in &leave {
             println!("  - {} ({})", path.display(), issue.description());
         }
-        crate::output::print_note(
-            "these are complete downloads — leave them as they are. To play H.265/HEVC, use VLC, or re-encode with: ffmpeg -i <file> -c:v libx264 -crf 20 <out>",
-        );
+        crate::output::print_note(&crate::i18n::t("scrape_complete_leave_as_is"));
     }
 
     if !unknown.is_empty() {
-        crate::output::print_error(&format!("{} file(s) could not be read:", unknown.len()));
+        crate::output::print_error(&crate::i18n::tf(
+            "scrape_files_could_not_be_read",
+            &[("n", &unknown.len().to_string())],
+        ));
         for (path, issue) in &unknown {
             println!("  - {} ({})", path.display(), issue.description());
         }
-        crate::output::print_note(
-            "these were reported as downloaded but could not be inspected, so completeness is unknown. Check the file permissions and free disk space, then re-run to confirm.",
-        );
+        crate::output::print_note(&crate::i18n::t("scrape_completeness_unknown"));
     }
 }
 
