@@ -211,6 +211,35 @@ pub fn find_channel(id: &str) -> Option<&'static BrowserChannel> {
     CHANNELS.iter().find(|c| c.id == id)
 }
 
+/// The browser *family* name gallery-dl accepts in `--cookies-from-browser`.
+///
+/// gallery-dl knows a fixed set of families, not channels: every Brave build
+/// (`brave`, `brave-origin`, `brave-beta`, …) is `brave` to it. Passing a
+/// channel id makes it reject the whole spec with `Unsupported browser` and
+/// continue **without cookies**, which reaches the site as an anonymous
+/// request and surfaces as an HTTP 403 that looks like an expired session.
+pub fn gallery_dl_browser_name(ch: &BrowserChannel) -> Option<&'static str> {
+    Some(match ch.id {
+        "firefox" => "firefox",
+        "chrome" => "chrome",
+        "chromium" => "chromium",
+        "edge" => "edge",
+        "vivaldi" => "vivaldi",
+        "opera" => "opera",
+        id if id.starts_with("brave") => "brave",
+        _ => return None,
+    })
+}
+
+/// Filename of a channel's cookie database.
+pub fn cookie_db_filename(ch: &BrowserChannel) -> &'static str {
+    if ch.id == "firefox" {
+        "cookies.sqlite"
+    } else {
+        "Cookies"
+    }
+}
+
 /// Resolve a channel from a user-supplied label, tolerating case and spaces
 /// ("Brave Origin" → `brave-origin`).
 pub fn resolve_channel(input: &str) -> Option<&'static BrowserChannel> {
@@ -355,17 +384,22 @@ fn is_populated_db(path: &Path) -> bool {
 }
 
 /// Locate a cookie DB among `roots`. Pure — see [`roots_for`].
+///
+/// Within a per-profile root the most recently written populated database
+/// wins, matching gallery-dl's own `_find_most_recently_used_file`. A hard
+/// preference for `Default` read a stale profile while the browser rotated its
+/// session in the profile the user actually had open, and the site then
+/// refused the old value with an HTTP 403.
 pub fn find_cookie_db_in(roots: &[Root], per_profile: bool, filename: &str) -> Option<CookieDb> {
     for (root, origin) in roots {
         if !root.is_dir() {
             continue;
         }
         if per_profile {
-            let default_db = root.join("Default").join(filename);
-            if is_populated_db(&default_db) {
+            if let Some((path, profile)) = newest_cookie_db(root, filename) {
                 return Some(CookieDb {
-                    path: default_db,
-                    profile: "Default".to_string(),
+                    path,
+                    profile,
                     origin,
                 });
             }
@@ -379,22 +413,12 @@ pub fn find_cookie_db_in(roots: &[Root], per_profile: bool, filename: &str) -> O
                 });
             }
         }
-        // No Default/<db>: fall back to the most recently written profile, so a
-        // user whose session lives in "Profile 2" is not told their cookies are
-        // missing.
-        if let Some((path, profile)) = newest_cookie_db(root, filename) {
-            return Some(CookieDb {
-                path,
-                profile,
-                origin,
-            });
-        }
     }
     None
 }
 
-/// Locate a channel's cookie database. `Default/<db>` is preferred when
-/// present, otherwise the most recently modified profile wins.
+/// Locate a channel's cookie database: the most recently modified populated
+/// profile, the same one gallery-dl would read.
 pub fn find_cookie_db(ch: &BrowserChannel, filename: &str) -> Option<CookieDb> {
     find_cookie_db_in(&profile_roots(ch), ch.per_profile, filename)
 }
@@ -424,6 +448,15 @@ mod tests {
     fn touch(path: &Path) {
         std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
         std::fs::write(path, b"x").expect("write");
+    }
+
+    fn set_mtime(path: &Path, secs: u64) {
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .expect("open");
+        file.set_modified(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+            .expect("set mtime");
     }
 
     #[test]
@@ -515,6 +548,44 @@ mod tests {
         assert_eq!(before, ids.len(), "duplicate channel id in registry");
     }
 
+    /// Every Brave channel must collapse to the one family gallery-dl knows.
+    /// Passing `brave-origin` made gallery-dl discard the spec with
+    /// "Unsupported browser" and send an anonymous request (HTTP 403).
+    #[test]
+    fn every_brave_channel_maps_to_gallery_dls_brave() {
+        for ch in CHANNELS.iter().filter(|c| c.id.starts_with("brave")) {
+            assert_eq!(
+                gallery_dl_browser_name(ch),
+                Some("brave"),
+                "{} must map to 'brave'",
+                ch.id
+            );
+        }
+        assert_eq!(
+            gallery_dl_browser_name(find_channel("firefox").expect("firefox")),
+            Some("firefox")
+        );
+        assert_eq!(
+            gallery_dl_browser_name(find_channel("chrome").expect("chrome")),
+            Some("chrome")
+        );
+    }
+
+    #[test]
+    fn cookie_db_filename_follows_the_browser_family() {
+        assert_eq!(
+            cookie_db_filename(find_channel("firefox").expect("firefox")),
+            "cookies.sqlite"
+        );
+        for id in ["brave", "brave-origin", "chrome", "chromium", "edge"] {
+            assert_eq!(
+                cookie_db_filename(find_channel(id).expect(id)),
+                "Cookies",
+                "{id} must read a Chromium-family database"
+            );
+        }
+    }
+
     /// `profile_roots` must expand a channel into native + flatpak + snap, all
     /// of which can hold a real cookie DB.
     #[test]
@@ -544,16 +615,36 @@ mod tests {
         );
     }
 
+    /// The bug behind a VSCO 403: scrapmf read `Default` while gallery-dl read
+    /// the profile the user actually had open, so the two processes sent
+    /// different sessions. The newest populated database must win regardless of
+    /// its directory name.
     #[test]
-    fn find_cookie_db_prefers_default_profile() {
+    fn find_cookie_db_prefers_the_newest_profile() {
+        let dir = temp_root();
+        let root = dir.path().join("BraveSoftware/Brave-Origin");
+        touch(&root.join("Default/Cookies"));
+        touch(&root.join("Profile 1/Cookies"));
+        set_mtime(&root.join("Default/Cookies"), 1_700_000_000);
+        set_mtime(&root.join("Profile 1/Cookies"), 1_800_000_000);
+
+        let db = find_cookie_db_in(&[(root, "native")], true, "Cookies").expect("cookie db");
+        assert_eq!(db.profile, "Profile 1");
+        assert!(db.path.ends_with("Profile 1/Cookies"));
+    }
+
+    /// Default still wins when it is the one that was written last.
+    #[test]
+    fn find_cookie_db_keeps_default_when_it_is_the_newest() {
         let dir = temp_root();
         let root = dir.path().join("BraveSoftware/Brave-Browser");
         touch(&root.join("Default/Cookies"));
         touch(&root.join("Profile 3/Cookies"));
+        set_mtime(&root.join("Profile 3/Cookies"), 1_700_000_000);
+        set_mtime(&root.join("Default/Cookies"), 1_800_000_000);
 
         let db = find_cookie_db_in(&[(root, "native")], true, "Cookies").expect("cookie db");
         assert_eq!(db.profile, "Default");
-        assert!(db.path.ends_with("Default/Cookies"));
     }
 
     #[test]

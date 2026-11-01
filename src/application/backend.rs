@@ -31,6 +31,78 @@ pub fn is_dev_pin() -> bool {
     GALLERY_DL_PIN.contains("dev") || GALLERY_DL_PIN.contains("rc")
 }
 
+/// When true, scrapmf installs and uses gallery-dl through the host's Python
+/// (pipx/pip) instead of downloading the standalone PyInstaller binary.
+///
+/// The standalone binary ships an old OpenSSL (3.0) whose TLS fingerprint
+/// Cloudflare rejects; the host's Python (3.14+) ships OpenSSL 3.5 which
+/// passes. Switching to `true` makes setup install via pipx/pip and makes
+/// backend resolution skip the managed binary, falling through to the
+/// system gallery-dl on $PATH.
+pub const GALLERY_DL_USE_PYTHON_BACKEND: bool = true;
+
+/// System gallery-dl found on $PATH. Used as a fallback when the bundled
+/// pinned build is rejected by anti-bot TLS/fingerprint checks (e.g. Cloudflare).
+pub fn system_binary() -> Option<PathBuf> {
+    which::which("gallery-dl").ok()
+}
+
+fn path_is_managed(p: &Path) -> bool {
+    if let Some(dir) = managed_dir() {
+        if let (Ok(cp), Ok(cd)) = (p.canonicalize(), dir.canonicalize())
+            && cp.starts_with(&cd)
+        {
+            return true;
+        }
+        if p.starts_with(&dir) {
+            return true;
+        }
+        if p.parent() == Some(dir.as_path()) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Pure predicate: pick a fallback binary only when we actually ran the
+/// managed/bundled copy and a different system binary exists.
+pub fn pick_fallback(
+    managed_path: Option<&Path>,
+    ran_path: &Path,
+    system_path: Option<PathBuf>,
+) -> Option<PathBuf> {
+    let ran_is_managed = path_is_managed(ran_path)
+        || managed_path.is_some_and(|m| {
+            if let (Ok(cr), Ok(cm)) = (ran_path.canonicalize(), m.canonicalize()) {
+                cr == cm
+            } else {
+                ran_path == m
+            }
+        });
+    if !ran_is_managed {
+        return None;
+    }
+    let sys = system_path?;
+    if let (Ok(cs), Ok(cr)) = (sys.canonicalize(), ran_path.canonicalize())
+        && cs == cr
+    {
+        return None;
+    }
+    if sys == ran_path {
+        return None;
+    }
+    Some(sys)
+}
+
+/// Return a system gallery-dl fallback if `ran` was the bundled managed binary.
+pub fn fallback_for(ran: &Path) -> Option<PathBuf> {
+    // If we're already running from the managed venv, no fallback needed.
+    if managed_venv_binary().is_some_and(|v| v == ran) {
+        return None;
+    }
+    pick_fallback(managed_installed().as_deref(), ran, system_binary())
+}
+
 /// Legacy constant kept for callers that reference the Linux asset directly.
 pub const GALLERY_DL_ASSET: &str = "gallery-dl.bin";
 
@@ -61,8 +133,36 @@ pub fn managed_dir() -> Option<PathBuf> {
     dirs::data_dir().map(|p| p.join("scrapmf/bin"))
 }
 
+/// Managed Python venv dir: `$XDG_DATA_HOME/scrapmf/venv`.
+/// Used to install gallery-dl with the host's Python (modern OpenSSL)
+/// instead of downloading the standalone PyInstaller binary.
+pub fn managed_venv_dir() -> Option<PathBuf> {
+    dirs::data_dir().map(|p| p.join("scrapmf/venv"))
+}
+
+/// The gallery-dl binary inside the managed venv, if it exists.
+pub fn managed_venv_binary() -> Option<PathBuf> {
+    let venv = managed_venv_dir()?;
+    let bin = if cfg!(windows) {
+        venv.join("Scripts").join("gallery-dl.exe")
+    } else {
+        venv.join("bin").join("gallery-dl")
+    };
+    bin.is_file().then_some(bin)
+}
+
+/// Whether the managed venv is installed.
+pub fn managed_venv_installed() -> bool {
+    managed_venv_binary().is_some()
+}
+
 /// Path of the managed binary if it is already installed.
 fn managed_installed() -> Option<PathBuf> {
+    // Prefer the managed venv (modern Python/OpenSSL) over the standalone
+    // PyInstaller binary (old Python/OpenSSL that Cloudflare blocks).
+    if let Some(p) = managed_venv_binary() {
+        return Some(p);
+    }
     let p = managed_dir()?.join(managed_binary_name());
     p.is_file().then_some(p)
 }
@@ -142,12 +242,16 @@ pub fn resolve(config_override: Option<PathBuf>) -> Source {
     } else {
         managed_installed()
     };
+    // Prefer the ScrapMF-managed venv (self-contained, modern Python) over
+    // the system gallery-dl. This makes ScrapMF independent of the host's
+    // gallery-dl installation.
+    let managed_venv = managed_venv_binary();
     let system = which::which("gallery-dl").ok();
 
     let sources = Sources {
         env,
         config: config_override.filter(|p| p.is_file()),
-        managed,
+        managed: managed_venv.or(managed),
         system,
     };
     pick(&sources)
