@@ -151,7 +151,7 @@ pub fn run(
             crate::output::print_info(&format!("Args preview: {:?}", args));
         }
         if dry_run {
-            crate::output::print_note("dry-run, no download");
+            crate::output::print_note(&crate::i18n::t("dry_run_no_download"));
         }
     }
 
@@ -180,11 +180,11 @@ pub fn run(
         Err(e) => {
             // User abort (Ctrl+C in dashboard): clean message + exit code 130
             // (128+SIGINT convention) so scripts can distinguish it from errors.
-            if e.chain().any(|c| c.to_string().contains("aborted by user")) {
-                crate::output::print_note("cancelled by user");
+            if e.chain().any(|c| c.to_string().contains(crate::i18n::t("aborted_by_user").as_str())) {
+                crate::output::print_note(&crate::i18n::t("cancelled_by_user"));
                 std::process::exit(130);
             }
-            return Err(e).context("scrape failed");
+            return Err(e).context(crate::i18n::t("scrape_failed"));
         }
     };
 
@@ -321,7 +321,7 @@ fn report_integrity(
 ) {
     if issues.is_empty() {
         if checked > 0 {
-            tracing::debug!(checked = checked, "integrity check: all files OK");
+            tracing::debug!(checked = checked, "{}", crate::i18n::t("integrity_ok"));
         }
         return;
     }

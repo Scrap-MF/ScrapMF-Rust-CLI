@@ -246,7 +246,7 @@ fn run_browser(
     let guard = match TerminalGuard::enter() {
         Ok(g) => g,
         Err(e) => {
-            eprintln!("error: cannot enter TUI mode: {e}");
+            eprintln!("{}", crate::i18n::t("tui_error").replace("{e}", &e.to_string()));
             return fallback();
         }
     };

@@ -8,10 +8,10 @@ pub fn run(command: Option<ConfigCommands>) -> Result<()> {
     match command {
         Some(ConfigCommands::List) => {
             let Some(path) = config::config_path() else {
-                anyhow::bail!("cannot determine config path");
+                anyhow::bail!(crate::i18n::t("cannot_determine_config_path"));
             };
             if !path.exists() {
-                println!("No config yet at {}", path.display());
+                println!("{}", crate::i18n::t("no_config_yet").replace("{}", &path.display().to_string()));
                 println!("Run: scrapmf config edit");
                 return Ok(());
             }
@@ -21,7 +21,7 @@ pub fn run(command: Option<ConfigCommands>) -> Result<()> {
         }
         Some(ConfigCommands::Path) => {
             let Some(path) = config::config_path() else {
-                anyhow::bail!("cannot determine config path");
+                anyhow::bail!(crate::i18n::t("cannot_determine_config_path"));
             };
             println!("{}", path.display());
         }
@@ -38,12 +38,12 @@ pub fn run(command: Option<ConfigCommands>) -> Result<()> {
 
 fn edit() -> Result<()> {
     let Some(path) = config::config_path() else {
-        anyhow::bail!("cannot determine config path");
+        anyhow::bail!(crate::i18n::t("cannot_determine_config_path"));
     };
     if !path.exists() {
         let cfg = config::Config::default();
         config::save(&cfg).context("create default config")?;
-        println!("Created default config at {}", path.display());
+        println!("{}", crate::i18n::t("created_default_config").replace("{}", &path.display().to_string()));
     }
     let editor = std::env::var("EDITOR")
         .or_else(|_| std::env::var("VISUAL"))
@@ -61,23 +61,26 @@ fn edit() -> Result<()> {
     // Validate after edit
     let s = std::fs::read_to_string(&path).context("read after edit")?;
     toml::from_str::<config::Config>(&s).context("config parse error after edit")?;
-    println!("✔ Config saved");
+    println!("{}", crate::i18n::t("config_saved"));
     Ok(())
 }
 
 fn interactive() -> Result<()> {
     let mut cfg = config::load().unwrap_or_default();
+    let show_label = crate::i18n::t("show_config_path");
+    let edit_label = crate::i18n::t("edit_manually");
+    let exit_label = crate::i18n::t("exit");
     let options = vec![
-        "Default output directory",
-        "Show config path",
-        "Edit manually",
-        "Exit",
+        "Default output directory".to_string(),
+        show_label.clone(),
+        edit_label.clone(),
+        exit_label.clone(),
     ];
-    let choice = Select::new("What to configure?", options)
+    let choice = Select::new(&crate::i18n::t("what_to_configure"), options)
         .prompt()
-        .unwrap_or("Exit");
+        .unwrap_or(exit_label.clone());
 
-    match choice {
+    match choice.as_str() {
         "Default output directory" => {
             let current = cfg.general.output_dir.display().to_string();
             let dir = Text::new("Default output directory:")
@@ -87,19 +90,19 @@ fn interactive() -> Result<()> {
             if !dir.trim().is_empty() {
                 cfg.general.output_dir = std::path::PathBuf::from(dir.trim());
                 config::save(&cfg)?;
-                println!("✔ Output dir saved");
+                println!("{}", crate::i18n::t("output_dir_saved"));
             }
         }
-        "Show config path" => {
+        s if s == show_label => {
             if let Some(p) = config::config_path() {
                 println!("{}", p.display());
             }
         }
-        "Edit manually" => {
+        s if s == edit_label => {
             edit()?;
         }
         _ => {
-            println!("bye");
+            println!("{}", crate::i18n::t("bye"));
         }
     }
     Ok(())

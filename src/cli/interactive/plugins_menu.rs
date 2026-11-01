@@ -1,4 +1,4 @@
-//! "Plugins" top-level submenu — pick a plugin, then manage it
+//! crate::i18n::t("plugins") top-level submenu — pick a plugin, then manage it
 //! (update/disable/remove). Thin UI over [`crate::plugins`] logic, rendered
 //! from the plugin registry so future plugins slot in without new menus.
 
@@ -29,7 +29,7 @@ pub(super) fn menu() {
 }
 
 fn plugin_submenu(def: &PluginDef) {
-    if def.id == "termux-scan" {
+    if def.id == crate::i18n::t("termux_scan") {
         termux_scan_submenu(def);
         return;
     }
@@ -51,7 +51,7 @@ fn plugin_submenu(def: &PluginDef) {
                 "Enable — install at pin {THREADSTRACTOR_PIN} (~150MB Chromium download)"
             )),
             PluginState::Disabled => {
-                options.push("Enable".to_string());
+                options.push(crate::i18n::t("enable").to_string());
                 options.push("Remove (deletes all files)".to_string());
             }
             PluginState::Enabled(_) => {
@@ -68,7 +68,7 @@ fn plugin_submenu(def: &PluginDef) {
         };
         match choice.as_str() {
             "Back" => return,
-            c if c.starts_with("Enable") || c.starts_with("Update / reinstall") => {
+            c if c.starts_with(&crate::i18n::t("enable")) || c.starts_with("Update / reinstall") => {
                 if let Err(e) = plugins::install() {
                     eprintln!("✖ install failed: {e}");
                 } else if matches!(state, PluginState::NotInstalled | PluginState::Disabled) {
@@ -111,11 +111,11 @@ fn termux_scan_submenu(def: &PluginDef) {
                 options.push("Help — how to install termux-api".to_string());
             }
             PluginState::Disabled => {
-                options.push("Enable".to_string());
+                options.push(crate::i18n::t("enable").to_string());
                 options.push("Help — how to install termux-api".to_string());
             }
             PluginState::Enabled(_) => {
-                options.push("Disable".to_string());
+                options.push(crate::i18n::t("disable").to_string());
                 options.push("Test scan now (uses configured output dir)".to_string());
             }
         }
@@ -127,7 +127,7 @@ fn termux_scan_submenu(def: &PluginDef) {
         };
         match choice.as_str() {
             "Back" => return,
-            c if c.starts_with("Enable") => match crate::plugins::set_termux_scan_disabled(false) {
+            c if c.starts_with(&crate::i18n::t("enable")) => match crate::plugins::set_termux_scan_disabled(false) {
                 Ok(()) => {
                     if matches!(crate::plugins::termux_scan_state(), PluginState::Enabled(_)) {
                         println!("✔ Termux MediaScan enabled");
@@ -141,7 +141,7 @@ fn termux_scan_submenu(def: &PluginDef) {
                 }
                 Err(e) => eprintln!("✖ failed: {e}"),
             },
-            "Disable" => match crate::plugins::set_termux_scan_disabled(true) {
+            s if s == crate::i18n::t("disable") => match crate::plugins::set_termux_scan_disabled(true) {
                 Ok(()) => {
                     println!("✔ disabled");
                     pause();
@@ -173,7 +173,7 @@ fn termux_scan_submenu(def: &PluginDef) {
                 }
                 pause();
             }
-            c if c.starts_with("Help") => {
+            c if c.starts_with(&crate::i18n::t("help")) => {
                 println!("  Install on Termux:");
                 println!("    1. Install Termux:API app from F-Droid");
                 println!("    2. pkg install termux-api");

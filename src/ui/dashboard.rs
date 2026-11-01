@@ -250,7 +250,7 @@ fn draw(
         ));
     } else {
         lines.push(Line::styled(
-            "Ctrl-C: abort",
+            crate::i18n::t("ctrl_c_abort"),
             Style::default()
                 .fg(Color::DarkGray)
                 .add_modifier(Modifier::ITALIC),
@@ -289,9 +289,9 @@ fn draw(
             })
             .collect();
         let title = if log_scroll > 0 {
-            " log (↑↓ scroll · more ↓) "
+            crate::i18n::t("log_more")
         } else {
-            " log (↑↓ scroll) "
+            " log (↑↓ scroll) ".to_string()
         };
         let log_block = Paragraph::new(log_lines)
             .block(
@@ -312,7 +312,7 @@ fn draw(
 ///
 /// When the user presses Ctrl-C in the dashboard the abort flag is also set.
 /// After the worker returns the dashboard does NOT close: it keeps rendering
-/// a finished state ("Done") until the user presses Enter (or Ctrl-C),
+/// a finished state (crate::i18n::t("done")) until the user presses Enter (or Ctrl-C),
 /// so results can be inspected before returning to the menu. While running,
 /// ↑↓ / PgUp / PgDn scroll the log panel (no mouse capture — text selection
 /// stays available).
@@ -331,7 +331,7 @@ where
     let guard = match TerminalGuard::enter() {
         Ok(guard) => guard,
         Err(e) => {
-            eprintln!("error: cannot enter TUI mode: {e}");
+            eprintln!("{}", crate::i18n::t("tui_error").replace("{e}", &e.to_string()));
             return worker();
         }
     };
@@ -371,7 +371,7 @@ where
                     show_logs,
                     snapshot_scroll,
                     render_finished.load(Ordering::Relaxed),
-                    // "Cancelled" only in the finished phase (abort + done)
+                    // crate::i18n::t("cancelled") only in the finished phase (abort + done)
                     render_finished.load(Ordering::Relaxed) && render_abort.load(Ordering::Relaxed),
                 );
             });

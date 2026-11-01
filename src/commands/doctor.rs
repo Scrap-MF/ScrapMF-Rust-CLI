@@ -186,11 +186,11 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
     } else {
         out.push(CheckLine {
             level: Level::Error,
-            text: "gallery-dl not found in $PATH".to_string(),
+            text: crate::i18n::t("gallery_dl_not_found"),
         });
         out.push(CheckLine {
             level: Level::Help,
-            text: "run scrapmf (interactive) and it will offer to install the pinned backend; 'scrapmf setup' also works".to_string(),
+            text: crate::i18n::t("gallery_dl_setup_help"),
         });
         ok = false;
     }
@@ -294,13 +294,13 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
     if available.is_empty() {
         out.push(CheckLine {
             level: Level::Info,
-            text: format!(
-                "No browser cookie DBs detected (checked: {})",
-                crate::browsers::CHANNELS
+            text: crate::i18n::t("no_cookie_dbs").replace(
+                "{list}",
+                &crate::browsers::CHANNELS
                     .iter()
                     .map(|c| c.id)
                     .collect::<Vec<_>>()
-                    .join(", ")
+                    .join(", "),
             ),
         });
         for b in &browsers {
@@ -423,7 +423,7 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
         if files == 0 {
             out.push(CheckLine {
                 level: Level::Info,
-                text: "Download archive: empty (dedup records appear after first scrape)"
+                text: crate::i18n::t("download_archive_empty")
                     .to_string(),
             });
         } else {
@@ -546,7 +546,7 @@ database — it will be re-captured on the next scrape"
     if ok {
         out.push(CheckLine {
             level: Level::Success,
-            text: "All checks passed".to_string(),
+            text: crate::i18n::t("all_checks_passed"),
         });
     }
     (out, ok)

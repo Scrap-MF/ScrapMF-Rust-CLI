@@ -364,6 +364,7 @@ pub fn ensure_default_config() -> anyhow::Result<()> {
                         output_dir: std::path::PathBuf::from("~/scrapmf"),
                         archive: cfg.general.archive,
                         cookies_from_browser: cfg.general.cookies_from_browser.clone(),
+                        language: cfg.general.language.clone(),
                     },
                     backend: cfg.backend.clone(),
                     ..Default::default()

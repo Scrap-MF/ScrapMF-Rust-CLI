@@ -41,7 +41,7 @@ impl<T: std::fmt::Display + Clone> DecoratedSelect<T> {
         let details = self.details;
         match crate::cli::interactive::menu::pick_single_details(&title, details, opts) {
             crate::cli::interactive::menu::Step::Value(idx) => Ok(self.options[idx].clone()),
-            // Outside a multi-step flow Esc and Ctrl+C both mean "leave".
+            // Outside a multi-step flow Esc and Ctrl+C both mean crate::i18n::t("leave").
             crate::cli::interactive::menu::Step::Back
             | crate::cli::interactive::menu::Step::Cancel => {
                 Err(inquire::InquireError::OperationCanceled)
@@ -110,7 +110,7 @@ pub fn run() {
 
     loop {
         let Some(action) = home::pick() else {
-            println!("bye");
+            println!("{}", crate::i18n::t("bye"));
             return;
         };
         match action {
@@ -121,32 +121,32 @@ pub fn run() {
                 // entry is inserted in the middle.
                 let outcome = Browser::new("Download content")
                     .entry(
-                        "Saved profile",
+                        crate::i18n::t("saved_profile"),
                         vec![
-                            "Run a saved scraping profile.".to_string(),
+                            crate::i18n::t("run_saved_profile").to_string(),
                             String::new(),
                             "Sites, cookies and output rules bundled".to_string(),
                             "for repeatable runs.".to_string(),
                         ],
                     )
                     .entry(
-                        "URL(s)",
+                        crate::i18n::t("urls"),
                         vec![
-                            "Paste & go: one or more URLs.".to_string(),
-                            "Site auto-detected per URL — no extra prompts.".to_string(),
+                            crate::i18n::t("paste_and_go").to_string(),
+                            crate::i18n::t("site_auto_detected").to_string(),
                         ],
                     )
                     .entry(
-                        "Quick scrape",
+                        crate::i18n::t("quick_scrape"),
                         vec![
-                            "One account, pick content kinds.".to_string(),
-                            "Fastest path: username in, media out.".to_string(),
+                            crate::i18n::t("one_account_pick").to_string(),
+                            crate::i18n::t("fastest_path").to_string(),
                         ],
                     )
                     .entry(
-                        "Tasks",
+                        crate::i18n::t("tasks"),
                         vec![
-                            "Saved batches: content chosen once, reuse it.".to_string(),
+                            crate::i18n::t("saved_batches").to_string(),
                             String::new(),
                             "One or more accounts, each with its own".to_string(),
                             "cookie session. Output under the task name.".to_string(),
@@ -192,7 +192,7 @@ pub fn run() {
                 clear_screen();
             }
             Action::Exit => {
-                println!("bye");
+                println!("{}", crate::i18n::t("bye"));
                 return;
             }
         }

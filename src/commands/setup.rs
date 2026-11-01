@@ -155,7 +155,7 @@ fn install_via_python(yes: bool) {
     println!("→ {cmd}");
 
     if !yes && !confirm("Run this now?") {
-        println!("cancelled — run it manually whenever you like");
+        println!("{}", crate::i18n::t("cancelled_run_manually"));
         return;
     }
 
@@ -273,7 +273,7 @@ fn install_managed(yes: bool) -> Result<()> {
             "Download and install gallery-dl v{GALLERY_DL_PIN} now?"
         ))
     {
-        println!("cancelled");
+        println!("{}", crate::i18n::t("cancelled"));
         return Ok(());
     }
 
@@ -336,7 +336,7 @@ fn install_yt_dlp_managed(yes: bool) -> Result<()> {
             backend::YT_DLP_PIN
         ))
     {
-        println!("cancelled");
+        println!("{}", crate::i18n::t("cancelled"));
         return Ok(());
     }
     let work = dir.join(format!(".setup-ytdlp-{}", std::process::id()));

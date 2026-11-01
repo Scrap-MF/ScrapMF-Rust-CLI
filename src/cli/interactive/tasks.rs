@@ -24,7 +24,7 @@ use crate::config::{self, Task, TaskAccount};
 ///
 /// `Option<T>` cannot carry both, and conflating them is what made Ctrl+C a
 /// dead key here: every helper returned `None` for "stepped back" *and* for
-/// "abandoned", so leaving without saving was the same gesture as going back.
+/// crate::i18n::t("abandoned"), so leaving without saving was the same gesture as going back.
 enum Answer<T> {
     Value(T),
     /// Esc — return to the previous question.
@@ -109,7 +109,7 @@ pub(super) fn tasks_menu() {
                 "cookie session.".to_string(),
             ],
         ));
-        entries.push(("Back".to_string(), vec![String::new()]));
+        entries.push((crate::i18n::t("back").to_string(), vec![String::new()]));
 
         let create_idx = names.len();
         let back_idx = names.len() + 1;
@@ -159,7 +159,7 @@ fn task_menu(id: &str, task: &Task, cfg: &config::Config, notice: &mut Option<St
                 "Delete".to_string(),
                 vec!["Removes the saved task.".to_string(), String::new()],
             ),
-            ("Back".to_string(), vec![String::new()]),
+            (crate::i18n::t("back").to_string(), vec![String::new()]),
         ];
         let picked = menu::pick_single(&theme::brand_site_label(id), entries);
         match picked {
@@ -381,7 +381,7 @@ fn create_task(existing: Option<Task>) -> Created {
                             vec![format!("{} account(s) total", total(&accounts) + 1)],
                         ),
                         (
-                            "Add another account".to_string(),
+                            crate::i18n::t("add_another_account").to_string(),
                             vec!["Site, account and content again.".to_string()],
                         ),
                     ],
@@ -468,7 +468,7 @@ fn finish(
 fn notice_from(outcome: &Created) -> Option<String> {
     match outcome {
         Created::Saved(name) => Some(format!("saved '{name}'")),
-        Created::Cancelled => Some("cancelled".to_string()),
+        Created::Cancelled => Some(crate::i18n::t("canceled").to_string()),
         // A failure already got the loud treatment; repeating it on the
         // footer would only be noise.
         Created::Failed(_) => None,
@@ -1161,16 +1161,16 @@ mod tests {
     fn back_and_abort_stay_distinct_answers() {
         // Collapsing these is what made Ctrl+C a dead key: it used to return
         // the same `None` as Esc, so leaving without saving was impossible.
-        fn shape(a: Answer<String>) -> &'static str {
+        fn shape(a: Answer<String>) -> String {
             match a {
-                Answer::Value(_) => "value",
-                Answer::Back => "back",
-                Answer::Abort => "abort",
+                Answer::Value(_) => "value".to_string(),
+                Answer::Back => "back".to_string(),
+                Answer::Abort => crate::i18n::t("abort"),
             }
         }
         assert_eq!(shape(Answer::Value("x".into())), "value");
         assert_eq!(shape(Answer::Back), "back");
-        assert_eq!(shape(Answer::Abort), "abort");
+        assert_eq!(shape(Answer::Abort), crate::i18n::t("abort"));
     }
 
     #[test]

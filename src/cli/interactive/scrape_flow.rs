@@ -465,7 +465,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
             .unwrap_or(false)
     };
     if !proceed {
-        println!("canceled");
+        println!("{}", crate::i18n::t("canceled"));
         return Step::Value(());
     }
 
@@ -616,7 +616,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                     match &result {
                         Ok(_) => st.finish_ok(i),
                         Err(e) => {
-                            if e.to_string().contains("aborted by user") {
+                            if e.to_string().contains(&crate::i18n::t("aborted_by_user")) {
                                 st.cancel_from(i);
                                 was_cancelled = true;
                                 failed = true;
@@ -678,7 +678,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
         });
 
         if was_cancelled {
-            println!("⚠ canceled");
+            println!("{}", crate::i18n::t("canceled_warning"));
         }
         for rep in &job_reports {
             for (stderr, line) in rep {
@@ -733,7 +733,7 @@ pub(super) fn integrity_report_lines(
 ) -> Vec<(bool, String)> {
     if issues.is_empty() {
         if checked > 0 {
-            tracing::debug!(checked, "integrity check: all files OK");
+            tracing::debug!(checked, "{}", crate::i18n::t("integrity_ok"));
         }
         return Vec::new();
     }
@@ -1062,7 +1062,7 @@ pub(super) fn prompt_scrape_direct_urls() {
                 Step::Value(v) => v,
                 // First question of this flow: Esc leaves.
                 Step::Back | Step::Cancel => {
-                    println!("canceled");
+                    println!("{}", crate::i18n::t("canceled"));
                     return;
                 }
             };

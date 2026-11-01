@@ -17,7 +17,7 @@ pub(crate) fn show() {
     let guard = match TerminalGuard::enter() {
         Ok(g) => g,
         Err(e) => {
-            eprintln!("error: cannot enter TUI mode: {e}");
+            eprintln!("{}", crate::i18n::t("tui_error").replace("{e}", &e.to_string()));
             // Fallback: plain CLI output
             let _ = crate::commands::doctor::run(1);
             return;
@@ -65,7 +65,7 @@ pub(crate) fn show() {
             // keep them inside the single box for full-screen coverage.
             let mut all: Vec<Line> = Vec::new();
             all.push(Line::styled(
-                "scrapmf doctor — checking backends and system",
+                crate::i18n::t("doctor_title"),
                 Style::default().add_modifier(ratatui::style::Modifier::BOLD),
             ));
             all.push(Line::from("─────────────────────────────────────────────"));

@@ -221,7 +221,7 @@ pub(super) fn prompt_content_kinds(site: &str, label: &str) -> menu::Step<Vec<Co
         .collect();
     let context = format!("Content for {label}");
     // Esc steps back to the previous question instead of reading as
-    // "nothing selected", which is what made a mis-typed username look like a
+    // crate::i18n::t("nothing_selected"), which is what made a mis-typed username look like a
     // cancelled run.
     let idxs = match menu::pick_multi_back(&context, opts.clone(), &[]) {
         menu::Step::Value(v) => v,
@@ -637,7 +637,7 @@ mod tests {
             overrides: std::collections::HashMap::new(),
         };
         let body = toml::to_string_pretty(&profile).expect("serialize");
-        let parsed: crate::config::Profile = toml::from_str(&body).expect("parse back");
+        let parsed: crate::config::Profile = toml::from_str(&body).expect(&crate::i18n::t("parse_back"));
         assert_eq!(parsed.profile.as_deref(), Some("example"));
         assert_eq!(parsed.accounts.len(), 2);
         assert_eq!(

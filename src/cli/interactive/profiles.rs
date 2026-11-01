@@ -147,7 +147,7 @@ pub(super) fn prompt_scrape_as_profile() {
     // instead of abandoning the run: preview → content → accounts → profile.
     'wizard: loop {
         let idx = match crate::cli::interactive::menu::pick_single(
-            "Choose profile",
+            crate::i18n::t("choose_profile").as_str(),
             profile_names
                 .iter()
                 .map(|n| (n.clone(), vec![format!("profile: {n}")]))
@@ -510,7 +510,7 @@ pub(super) fn prompt_new_profile_accounts(name: &str) -> crate::config::Profile 
 
         let more = crate::cli::interactive::menu::confirm_back(
             "Add account",
-            "Add another account?",
+            crate::i18n::t("add_another_account").as_str(),
             false,
             false,
         )
@@ -578,7 +578,7 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
             eprintln!("  help: use Advanced → $EDITOR to fix the syntax manually");
             // Only escape hatch available on corrupt data
             let _ = crate::cli::interactive::menu::confirm_back(
-                "Manage Profiles",
+                crate::i18n::t("manage_profiles").as_str(),
                 "Open in $EDITOR now?",
                 true,
                 false,
@@ -620,6 +620,7 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
         }
 
         println!("Profile: {name} — {} account(s)", account_options.len());
+        let delete_label = crate::i18n::t("delete_profile");
         let options = vec![
             "Add account",
             "Edit account",
@@ -627,7 +628,7 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
             "Rename display name",
             "Show summary",
             "Advanced: open in $EDITOR",
-            "Delete profile",
+            delete_label.as_str(),
             "Back",
         ];
         let choice = match select_menu("Profile menu:", options).prompt() {
@@ -636,10 +637,10 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
         };
         match choice {
             "Back" => return,
-            "Delete profile" => {
+            s if s == crate::i18n::t("delete_profile").as_str() => {
                 // Destructive: Enter keeps the profile, `y` deletes it.
                 if crate::cli::interactive::menu::confirm_back(
-                    "Manage Profiles",
+                    crate::i18n::t("manage_profiles").as_str(),
                     &format!("Delete profile '{name}' and its .toml?"),
                     false,
                     true,
@@ -754,7 +755,7 @@ pub(super) fn edit_profile_menu(name: &str, path: &Path) {
                     };
                 // Destructive: Enter keeps the account, `y` removes it.
                 if !crate::cli::interactive::menu::confirm_back(
-                    "Manage Profiles",
+                    crate::i18n::t("manage_profiles").as_str(),
                     &format!("Remove {picked}?"),
                     false,
                     true,
