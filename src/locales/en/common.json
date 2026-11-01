@@ -257,5 +257,14 @@
   "no_valid_urls_esc_cancel": "ℹ No valid URLs — Esc to cancel",
   "no_site_match_using_general": "ℹ {url} — no sites/*.toml match; using general config",
   "download_content_urls": "Download content ─ URL(s)",
-  "download_content_site": "Download content ─ {site}"
+  "download_content_site": "Download content ─ {site}",
+  "sites_cookies_output_bundled": "Sites, cookies and output rules bundled",
+  "for_repeatable_runs": "for repeatable runs.",
+  "one_or_more_accounts": "One or more accounts, each with its own",
+  "cookie_session_output_under_task": "cookie session. Output under the task name.",
+  "doctor_detail_backend": "  · gallery-dl backend + pinned version",
+  "doctor_detail_plugins": "  · plugin availability",
+  "doctor_detail_browsers": "  · browser cookie DBs",
+  "doctor_detail_archive": "  · download archive stats",
+  "doctor_detail_tempdir": "  · temp dir writability"
 }

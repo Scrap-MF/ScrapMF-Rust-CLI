@@ -114,11 +114,11 @@ fn detail_lines(action: Action) -> Vec<String> {
         Action::Doctor => vec![
             crate::i18n::t("health_check").to_string(),
             String::new(),
-            "  · gallery-dl backend + pinned version".to_string(),
-            "  · plugin availability".to_string(),
-            "  · browser cookie DBs".to_string(),
-            "  · download archive stats".to_string(),
-            "  · temp dir writability".to_string(),
+            crate::i18n::t("doctor_detail_backend").to_string(),
+            crate::i18n::t("doctor_detail_plugins").to_string(),
+            crate::i18n::t("doctor_detail_browsers").to_string(),
+            crate::i18n::t("doctor_detail_archive").to_string(),
+            crate::i18n::t("doctor_detail_tempdir").to_string(),
         ],
         Action::Exit => vec![crate::i18n::t("leave_scrapmf").to_string()],
     }

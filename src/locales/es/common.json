@@ -257,5 +257,14 @@
   "no_valid_urls_esc_cancel": "ℹ No hay URLs válidas — Esc para cancelar",
   "no_site_match_using_general": "ℹ {url} — no coincide con ningún sites/*.toml; se usa la config general",
   "download_content_urls": "Descargar contenido ─ URL(s)",
-  "download_content_site": "Descargar contenido ─ {site}"
+  "download_content_site": "Descargar contenido ─ {site}",
+  "sites_cookies_output_bundled": "Sitios, cookies y reglas de salida incluidos",
+  "for_repeatable_runs": "para ejecuciones repetibles.",
+  "one_or_more_accounts": "Una o más cuentas, cada una con su",
+  "cookie_session_output_under_task": "sesión de cookies. Salida bajo el nombre de la tarea.",
+  "doctor_detail_backend": "  · backend gallery-dl + versión anclada",
+  "doctor_detail_plugins": "  · disponibilidad de plugins",
+  "doctor_detail_browsers": "  · bases de cookies del navegador",
+  "doctor_detail_archive": "  · estadísticas del archivo de descargas",
+  "doctor_detail_tempdir": "  · escritura del directorio temporal"
 }

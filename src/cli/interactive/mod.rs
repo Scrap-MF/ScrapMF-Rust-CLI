@@ -125,8 +125,8 @@ pub fn run() {
                         vec![
                             crate::i18n::t("run_saved_profile").to_string(),
                             String::new(),
-                            "Sites, cookies and output rules bundled".to_string(),
-                            "for repeatable runs.".to_string(),
+                            crate::i18n::t("sites_cookies_output_bundled").to_string(),
+                            crate::i18n::t("for_repeatable_runs").to_string(),
                         ],
                     )
                     .entry(
@@ -148,8 +148,8 @@ pub fn run() {
                         vec![
                             crate::i18n::t("saved_batches").to_string(),
                             String::new(),
-                            "One or more accounts, each with its own".to_string(),
-                            "cookie session. Output under the task name.".to_string(),
+                            crate::i18n::t("one_or_more_accounts").to_string(),
+                            crate::i18n::t("cookie_session_output_under_task").to_string(),
                         ],
                     )
                     .run();
