@@ -29,6 +29,12 @@ use std::path::{Path, PathBuf};
 /// release (same policy as `application::backend::GALLERY_DL_PIN`).
 pub const THREADSTRACTOR_PIN: &str = "v1.2.0";
 
+/// Exact upstream release of the tiktok plugin scrapmf installs.
+pub const TIKTSTRACTOR_PIN: &str = "1.2.0";
+
+/// Public PyPI spec used by `pip install` during Enable (tiktok).
+pub const TIKTSTRACTOR_SPEC: &str = "tikstractormf[browser,antibot]==1.2.0";
+
 // ─── Plugin registry ────────────────────────────────────────────────────────
 
 /// Static descriptor for a plugin. Adding a new plugin = one entry here plus
@@ -48,6 +54,11 @@ pub const REGISTRY: &[PluginDef] = &[
     PluginDef {
         id: "threads",
         title: "ThreadstractorMF",
+        vendor: "MFApplications",
+    },
+    PluginDef {
+        id: "tiktok",
+        title: "Tiktractormf",
         vendor: "MFApplications",
     },
     PluginDef {
@@ -99,6 +110,28 @@ fn threads_venv() -> Option<PathBuf> {
 
 fn threads_version_file() -> Option<PathBuf> {
     plugin_dir("threads").map(|p| p.join("version"))
+}
+
+fn tiktok_venv() -> Option<PathBuf> {
+    plugin_dir("tiktok").map(|p| p.join("venv"))
+}
+
+fn tiktok_version_file() -> Option<PathBuf> {
+    plugin_dir("tiktok").map(|p| p.join("version"))
+}
+
+fn tiktok_binary_path() -> Option<PathBuf> {
+    dirs::data_dir().map(|p| p.join("scrapmf/bin/tikstractormf"))
+}
+
+fn tiktok_venv_binary() -> Option<PathBuf> {
+    tiktok_venv().map(|venv| {
+        #[cfg(windows)]
+        let p = venv.join("Scripts").join("tikstractormf.exe");
+        #[cfg(not(windows))]
+        let p = venv.join("bin").join("tikstractormf");
+        p
+    })
 }
 
 /// Managed entry point exposed next to the gallery-dl backend:
@@ -155,6 +188,36 @@ pub fn threads_state() -> PluginState {
 /// Shorthand used by UI gating: true only when the plugin can be used.
 pub fn threads_enabled() -> bool {
     matches!(threads_state(), PluginState::Enabled(_))
+}
+
+fn compute_tiktok_state(venv_exists: bool, disabled: bool) -> PluginState {
+    let version = tiktok_version_file()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .unwrap_or_default();
+    match (venv_exists, disabled) {
+        (false, _) => PluginState::NotInstalled,
+        (true, true) => PluginState::Disabled,
+        (true, false) => {
+            let trimmed = version.trim();
+            if trimmed.is_empty() {
+                PluginState::Enabled(format!("unknown (pin {TIKTSTRACTOR_PIN})"))
+            } else {
+                PluginState::Enabled(trimmed.to_string())
+            }
+        }
+    }
+}
+
+pub fn tiktok_state() -> PluginState {
+    let venv_exists = tiktok_venv().is_some_and(|p| p.is_dir());
+    let disabled = crate::config::load()
+        .map(|c| c.plugins.tiktok_disabled)
+        .unwrap_or(false);
+    compute_tiktok_state(venv_exists, disabled)
+}
+
+pub fn tiktok_enabled() -> bool {
+    matches!(tiktok_state(), PluginState::Enabled(_))
 }
 
 // ─── Termux MediaScan (lightweight, no venv) ──────────────────────────────────
@@ -233,6 +296,32 @@ pub fn resolve_binary() -> anyhow::Result<PathBuf> {
     anyhow::bail!(
         "threads plugin is not enabled. Enable it in scrapmf → Plugins (installs \
          threadstractormf {THREADSTRACTOR_PIN} into a dedicated scrapmf venv)"
+    )
+}
+
+pub fn resolve_tiktok_binary() -> anyhow::Result<PathBuf> {
+    if let Ok(p) = std::env::var("SCRAPMF_TIKTOK_BIN") {
+        let path = PathBuf::from(p);
+        if path.is_file() {
+            return Ok(path);
+        }
+    }
+    if let Some(managed) = tiktok_binary_path()
+        && managed.is_file()
+    {
+        return Ok(managed);
+    }
+    if let Some(venv_bin) = tiktok_venv_binary()
+        && venv_bin.is_file()
+    {
+        return Ok(venv_bin);
+    }
+    if let Ok(path) = which::which("tikstractormf") {
+        return Ok(path);
+    }
+    anyhow::bail!(
+        "tiktok plugin is not enabled. Enable it in scrapmf → Plugins (installs \
+         tikstractormf {TIKTSTRACTOR_PIN} into a dedicated scrapmf venv)"
     )
 }
 
@@ -317,6 +406,93 @@ pub fn install() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Install (or re-install/update) the tiktok plugin at the pinned version.
+pub fn install_tiktok() -> anyhow::Result<()> {
+    use crate::output;
+    let venv = tiktok_venv().ok_or_else(|| anyhow::anyhow!("cannot determine scrapmf data dir"))?;
+    std::fs::create_dir_all(&venv)?;
+    output::print_info(&crate::i18n::tf(
+        "plugins_creating_venv",
+        &[("path", &venv.display().to_string())],
+    ));
+    crate::process::Executor::run_inherited_checked(
+        "python3",
+        &["-m".into(), "venv".into(), venv.as_os_str().to_owned()],
+    )?;
+
+    let pip = venv_python_pip(&venv);
+    output::print_info(&crate::i18n::tf(
+        "plugins_installing_tiktok",
+        &[("pin", TIKTSTRACTOR_PIN)],
+    ));
+    crate::process::Executor::run_inherited_checked(&pip.0, &pip.1)?;
+
+    // Playwright/Chromium for the optional browser fallback. Best-effort.
+    output::print_info(&crate::i18n::t("plugins_downloading_chromium"));
+    let pw_install = playwright_cli(&venv);
+    if let Err(e) = crate::process::Executor::run_inherited_checked(&pw_install.0, &pw_install.1) {
+        output::print_help(&crate::i18n::tf(
+            "plugins_chromium_download_failed",
+            &[("e", &e.to_string()), ("pw", pw_install.0.as_str())],
+        ));
+    }
+
+    // Smoke test: --version proves the binary runs.
+    if let Some(bin) = tiktok_venv_binary() {
+        let _ = crate::process::Executor::run_capturing(
+            &bin.to_string_lossy(),
+            &[std::ffi::OsString::from("--version")],
+        );
+    }
+
+    if let Some(vf) = tiktok_version_file() {
+        std::fs::write(&vf, TIKTSTRACTOR_PIN)?;
+    }
+
+    if let (Some(src), Some(dst)) = (tiktok_venv_binary(), tiktok_binary_path()) {
+        if let Some(parent) = dst.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let _ = std::fs::remove_file(&dst);
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&src, &dst)
+                .or_else(|_| std::fs::copy(&src, &dst).map(|_| ()))?;
+        }
+        #[cfg(windows)]
+        {
+            std::fs::copy(&src, &dst)?;
+        }
+    }
+
+    set_tiktok_disabled(false)?;
+    crate::config::ensure_tiktok_site()?;
+    output::print_success(&crate::i18n::tf(
+        "plugins_tiktok_enabled",
+        &[("pin", TIKTSTRACTOR_PIN)],
+    ));
+    Ok(())
+}
+
+/// Delete the tiktok plugin payload completely.
+pub fn remove_tiktok() -> anyhow::Result<()> {
+    if let Some(dir) = plugin_dir("tiktok")
+        && dir.exists()
+    {
+        std::fs::remove_dir_all(&dir)?;
+    }
+    if let Some(link) = tiktok_binary_path() {
+        let _ = std::fs::remove_file(link);
+    }
+    Ok(())
+}
+
+pub fn set_tiktok_disabled(disabled: bool) -> anyhow::Result<()> {
+    crate::config::update(|cfg| {
+        cfg.plugins.tiktok_disabled = disabled;
+    })
+}
+
 /// Delete the plugin payload completely (venv, version marker, entry point).
 /// Re-enabling afterwards performs a fresh install.
 pub fn remove() -> anyhow::Result<()> {
@@ -374,6 +550,23 @@ fn venv_pip(venv: &Path) -> (String, Vec<std::ffi::OsString>) {
             "--upgrade".into(),
             PKG_SPEC.into(),
             "browser-cookie3>=0.20".into(),
+        ],
+    )
+}
+
+fn venv_python_pip(venv: &Path) -> (String, Vec<std::ffi::OsString>) {
+    #[cfg(windows)]
+    let py = venv.join("Scripts").join("python.exe");
+    #[cfg(not(windows))]
+    let py = venv.join("bin").join("python");
+    (
+        py.to_string_lossy().into_owned(),
+        vec![
+            "-m".into(),
+            "pip".into(),
+            "install".into(),
+            "--upgrade".into(),
+            TIKTSTRACTOR_SPEC.into(),
         ],
     )
 }

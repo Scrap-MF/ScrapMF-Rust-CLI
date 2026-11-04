@@ -140,6 +140,10 @@ const ALLOW_LIST: &[&str] = &[
     "--get-urls",
     "--photos-only",
     "--videos-only",
+    "--only-stories",
+    "--profile-pic-only",
+    "--get-urls",
+    "--archive",
     // Download robustness (flaky CDNs, large videos): retry/timeout tuning
     "--retries",
     "--http-timeout",
@@ -976,6 +980,10 @@ pub fn is_threads_url(url: &str) -> bool {
     url.contains("threads.com") || url.contains("threads.net")
 }
 
+pub fn is_tiktok_url(url: &str) -> bool {
+    url.contains("tiktok.com")
+}
+
 fn run_one_sub_scrape(
     req: &ScrapeRequest,
     url: &str,
@@ -1005,6 +1013,7 @@ fn run_one_sub_scrape_impl(
             )
         );
     }
+    let is_tiktok = is_tiktok_url(url);
     let (binary, mut args) = if is_threads {
         let p = crate::providers::threadstractor::Threadstractor;
         let bin = crate::providers::threadstractor::Threadstractor::binary()?
@@ -1013,6 +1022,17 @@ fn run_one_sub_scrape_impl(
         let mut sub_req = req.clone();
         sub_req.url = url.to_string();
         apply_sub_url_overrides(&mut sub_req, url);
+        let a = p.build_args(&sub_req)?;
+        (bin, a)
+    } else if is_tiktok && crate::plugins::tiktok_enabled() {
+        let p = crate::providers::tiktractormf::Tiktractormf;
+        let bin = crate::providers::tiktractormf::Tiktractormf::binary()?
+            .to_string_lossy()
+            .into_owned();
+        let mut sub_req = req.clone();
+        sub_req.url = url.to_string();
+        apply_sub_url_overrides(&mut sub_req, url);
+        resolve_cookie_browser(&mut sub_req);
         let a = p.build_args(&sub_req)?;
         (bin, a)
     } else {

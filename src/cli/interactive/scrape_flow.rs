@@ -494,6 +494,16 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                 if !missing.contains(&msg) {
                     missing.push(msg);
                 }
+            } else if site == "tiktok"
+                && crate::plugins::tiktok_enabled()
+                && !crate::providers::Provider::is_available(
+                    &crate::providers::tiktractormf::Tiktractormf,
+                )
+            {
+                let msg = crate::i18n::t("tiktok_plugin_not_enabled_scrape");
+                if !missing.contains(&msg) {
+                    missing.push(msg);
+                }
             } else if !needs_threads
                 && !crate::providers::Provider::is_available(
                     &crate::providers::gallery_dl::GalleryDl,
@@ -1214,6 +1224,9 @@ pub(super) fn site_options_with_fallbacks(fallbacks: &[&str]) -> Vec<String> {
     // the plugin is installed and enabled (threads → threadstractormf).
     if !crate::plugins::threads_enabled() {
         opts.retain(|s| s != "threads");
+    }
+    if !crate::plugins::tiktok_enabled() {
+        opts.retain(|s| s != "tiktok");
     }
     opts.sort();
     opts

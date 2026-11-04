@@ -43,6 +43,9 @@ pub(super) fn configuration_submenu() {
             if !crate::plugins::threads_enabled() {
                 v.retain(|n| n != "threads");
             }
+            if !crate::plugins::tiktok_enabled() {
+                v.retain(|n| n != "tiktok");
+            }
             v.sort();
             v
         })
@@ -949,6 +952,9 @@ pub(super) fn manage_sites() {
         // Plugin gating: plugin-backed sites only show when enabled.
         if !crate::plugins::threads_enabled() {
             entries.retain(|n| n != "threads");
+        }
+        if !crate::plugins::tiktok_enabled() {
+            entries.retain(|n| n != "tiktok");
         }
         use crate::cli::interactive::theme::SiteItem;
         let mut options: Vec<SiteItem> = entries.iter().map(|e| SiteItem::new(e.clone())).collect();

@@ -239,6 +239,20 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                 text: crate::i18n::t("doctor_plugins_threads_not_installed"),
             }),
         }
+        match crate::plugins::tiktok_state() {
+            PluginState::Enabled(v) => out.push(CheckLine {
+                level: Level::Success,
+                text: crate::i18n::tf("doctor_plugins_tiktok_enabled", &[("v", &v)]),
+            }),
+            PluginState::Disabled => out.push(CheckLine {
+                level: Level::Info,
+                text: crate::i18n::t("doctor_plugins_tiktok_disabled"),
+            }),
+            PluginState::NotInstalled => out.push(CheckLine {
+                level: Level::Info,
+                text: crate::i18n::t("doctor_plugins_tiktok_not_installed"),
+            }),
+        }
         match crate::plugins::termux_scan_state() {
             PluginState::Enabled(_) => {
                 out.push(CheckLine {

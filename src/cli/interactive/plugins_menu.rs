@@ -82,7 +82,12 @@ fn plugin_submenu(def: &PluginDef) {
             c if c.starts_with(&crate::i18n::t("enable"))
                 || c.starts_with(&crate::i18n::t("update_reinstall_pin")) =>
             {
-                if let Err(e) = plugins::install() {
+                let res = match def.id {
+                    "threads" => plugins::install(),
+                    "tiktok" => plugins::install_tiktok(),
+                    _ => Ok(()),
+                };
+                if let Err(e) = res {
                     eprintln!(
                         "{}",
                         crate::i18n::tf("install_failed_x", &[("e", &e.to_string())])
@@ -99,20 +104,32 @@ fn plugin_submenu(def: &PluginDef) {
                 pause();
             }
             s if s == crate::i18n::t("disable_hide_keep_files") => {
-                match plugins::set_disabled(true) {
+                let res = match def.id {
+                    "threads" => plugins::set_disabled(true),
+                    "tiktok" => plugins::set_tiktok_disabled(true),
+                    _ => Ok(()),
+                };
+                match res {
                     Ok(()) => println!("{}", crate::i18n::t("disabled_options_hidden_files_kept")),
                     Err(e) => {
                         eprintln!("{}", crate::i18n::tf("failed_x", &[("e", &e.to_string())]))
                     }
                 }
             }
-            s if s == crate::i18n::t("remove_deletes_all_files") => match plugins::remove() {
-                Ok(()) => println!("{}", crate::i18n::t("removed_completely")),
-                Err(e) => eprintln!(
-                    "{}",
-                    crate::i18n::tf("remove_failed_x", &[("e", &e.to_string())])
-                ),
-            },
+            s if s == crate::i18n::t("remove_deletes_all_files") => {
+                let res = match def.id {
+                    "threads" => plugins::remove(),
+                    "tiktok" => plugins::remove_tiktok(),
+                    _ => Ok(()),
+                };
+                match res {
+                    Ok(()) => println!("{}", crate::i18n::t("removed_completely")),
+                    Err(e) => eprintln!(
+                        "{}",
+                        crate::i18n::tf("remove_failed_x", &[("e", &e.to_string())])
+                    ),
+                }
+            }
             _ => {}
         }
     }
@@ -244,6 +261,7 @@ fn termux_scan_submenu(def: &PluginDef) {
 fn state_for(def: &PluginDef) -> PluginState {
     match def.id {
         "threads" => plugins::threads_state(),
+        "tiktok" => plugins::tiktok_state(),
         "termux-scan" => plugins::termux_scan_state(),
         _ => PluginState::NotInstalled,
     }
@@ -261,6 +279,7 @@ fn status_short(id: &str) -> String {
 fn state_for_id(id: &str) -> PluginState {
     match id {
         "threads" => plugins::threads_state(),
+        "tiktok" => plugins::tiktok_state(),
         "termux-scan" => plugins::termux_scan_state(),
         _ => PluginState::NotInstalled,
     }

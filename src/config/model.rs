@@ -28,6 +28,10 @@ pub struct Plugins {
     /// its installed files (re-enable without re-downloading).
     #[serde(default)]
     pub threads_disabled: bool,
+    /// tiktok plugin (tiktractormf) manually disabled from the Plugins menu
+    /// while keeping its installed files (re-enable without re-downloading).
+    #[serde(default)]
+    pub tiktok_disabled: bool,
     /// termux media-scan plugin disabled by default (opt-in). When enabled,
     /// scrapmf runs `termux-media-scan <scrapmf_dir>` once per finished
     /// download (quick / saved profile / url / CLI). Best-effort, never fails.
@@ -39,6 +43,7 @@ impl Default for Plugins {
     fn default() -> Self {
         Self {
             threads_disabled: false,
+            tiktok_disabled: false,
             termux_scan_disabled: true,
         }
     }
