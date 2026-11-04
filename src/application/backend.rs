@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 ///    https://codeberg.org/mikf/gallery-dl/releases/tag/v{PIN}
 /// 2. Update this constant, run the full test suite.
 /// 3. Cut a new scrapmf release — users get the new pin via `scrapmf setup`.
-pub const GALLERY_DL_PIN: &str = "1.32.19";
+pub const GALLERY_DL_PIN: &str = "1.33.0-dev";
 
 /// Pinned yt-dlp version managed by scrapmf (used by gallery-dl's ytdl
 /// fallback). Standalone builds published by upstream on GitHub.
@@ -242,10 +242,17 @@ pub fn resolve(config_override: Option<PathBuf>) -> Source {
     } else {
         managed_installed()
     };
+    // Dev builds are installed through the host's pipx/pip (system), not into
+    // scrapmf's managed venv. Ignoring the venv here prevents a stale stable
+    // build (e.g. 1.32.19) from shadowing the freshly installed dev one.
+    let managed_venv = if is_dev_pin() {
+        None
+    } else {
+        managed_venv_binary()
+    };
     // Prefer the ScrapMF-managed venv (self-contained, modern Python) over
     // the system gallery-dl. This makes ScrapMF independent of the host's
     // gallery-dl installation.
-    let managed_venv = managed_venv_binary();
     let system = which::which("gallery-dl").ok();
 
     let sources = Sources {

@@ -168,10 +168,22 @@ fn install_via_python(yes: bool) {
         .iter()
         .map(std::ffi::OsString::from)
         .collect();
-    argv.extend([
-        std::ffi::OsString::from("install"),
-        std::ffi::OsString::from(spec),
-    ]);
+    argv.extend([std::ffi::OsString::from("install")]);
+    // pipx refuses to overwrite an existing install unless --force is given.
+    #[cfg(unix)]
+    if choice.label == "pipx" {
+        argv.push(std::ffi::OsString::from("--force"));
+    }
+    argv.push(std::ffi::OsString::from(spec));
+    // secretstorage is needed to decrypt v11 browser cookies (Brave/Chrome).
+    // It is an optional dependency of gallery-dl; install it explicitly so
+    // cookie-based scraping works out of the box. pip can install several
+    // packages in one invocation; pipx cannot (it treats each as an app), so
+    // for pipx we inject it afterwards.
+    #[cfg(unix)]
+    if choice.label == "pip" {
+        argv.push(std::ffi::OsString::from("secretstorage"));
+    }
     match crate::process::Executor::run_capturing(bin, &argv) {
         Ok(out) if out.status.success() => {}
         Ok(out) => {
@@ -193,6 +205,21 @@ fn install_via_python(yes: bool) {
             print_python_fallback();
             return;
         }
+    }
+    // pipx cannot install a library as an app, so inject secretstorage into
+    // the gallery-dl venv after the main install. Best-effort: a failure here
+    // only means cookies may be partially decrypted, not a broken backend.
+    #[cfg(unix)]
+    if choice.label == "pipx" {
+        let _ = crate::process::Executor::run_capturing(
+            "pipx",
+            &[
+                std::ffi::OsString::from("runpip"),
+                std::ffi::OsString::from("gallery-dl"),
+                std::ffi::OsString::from("install"),
+                std::ffi::OsString::from("secretstorage"),
+            ],
+        );
     }
     verify_system_install();
 }
@@ -273,11 +300,26 @@ fn install_managed_venv(yes: bool) -> Result<()> {
     };
 
     if venv_gdl.is_file() {
-        output::print_success(&crate::i18n::tf(
-            "setup_managed_venv_already_installed",
-            &[("path", &venv_gdl.display().to_string())],
+        let installed = installed_version(&venv_gdl);
+        if installed.as_deref() == Some(backend::GALLERY_DL_PIN) {
+            output::print_success(&crate::i18n::tf(
+                "setup_managed_venv_already_installed",
+                &[("path", &venv_gdl.display().to_string())],
+            ));
+            return Ok(());
+        }
+        // Existing venv is a different (older) version: fall through and
+        // reinstall instead of freezing the stale backend in place.
+        output::print_info(&crate::i18n::tf(
+            "setup_installed_gdl_version",
+            &[
+                (
+                    "installed",
+                    &installed.unwrap_or_else(|| "unreadable".to_string()),
+                ),
+                ("pin", backend::GALLERY_DL_PIN),
+            ],
         ));
-        return Ok(());
     }
 
     std::fs::create_dir_all(&venv).with_context(|| format!("create {}", venv.display()))?;
@@ -308,8 +350,18 @@ fn install_managed_venv(yes: bool) -> Result<()> {
         "{}",
         crate::i18n::tf("setup_installing_into_venv", &[("pin", pin)])
     );
+    let mut install_args = vec![
+        "-m".to_string(),
+        "pip".to_string(),
+        "install".to_string(),
+        "--quiet".to_string(),
+        spec.clone(),
+    ];
+    // secretstorage is needed to decrypt v11 browser cookies (Brave/Chrome).
+    #[cfg(unix)]
+    install_args.push("secretstorage".to_string());
     let status = std::process::Command::new(&venv_python)
-        .args(["-m", "pip", "install", "--quiet", &spec])
+        .args(&install_args)
         .status()
         .with_context(|| format!("pip install in {}", venv.display()))?;
     if !status.success() {
