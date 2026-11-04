@@ -1225,9 +1225,6 @@ pub(super) fn site_options_with_fallbacks(fallbacks: &[&str]) -> Vec<String> {
     if !crate::plugins::threads_enabled() {
         opts.retain(|s| s != "threads");
     }
-    if !crate::plugins::tiktok_enabled() {
-        opts.retain(|s| s != "tiktok");
-    }
     opts.sort();
     opts
 }
