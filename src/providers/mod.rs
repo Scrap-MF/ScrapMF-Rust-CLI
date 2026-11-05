@@ -1,7 +1,7 @@
 pub mod browser;
 pub mod gallery_dl;
 pub mod threadstractor;
-pub mod tiktractormf;
+pub mod tikstractormf;
 
 use std::ffi::OsString;
 

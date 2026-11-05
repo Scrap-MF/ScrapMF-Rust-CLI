@@ -28,7 +28,7 @@ pub struct Plugins {
     /// its installed files (re-enable without re-downloading).
     #[serde(default)]
     pub threads_disabled: bool,
-    /// tiktok plugin (tiktractormf) manually disabled from the Plugins menu
+    /// tiktok plugin (tikstractormf) manually disabled from the Plugins menu
     /// while keeping its installed files (re-enable without re-downloading).
     #[serde(default)]
     pub tiktok_disabled: bool,

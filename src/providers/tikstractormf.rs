@@ -3,18 +3,18 @@ use std::path::PathBuf;
 
 use super::{Provider, ScrapeRequest};
 
-/// Provider for TikTok via the `tiktractormf` Python package.
-pub struct Tiktractormf;
+/// Provider for TikTok via the `tikstractormf` Python package.
+pub struct Tikstractormf;
 
-impl Tiktractormf {
+impl Tikstractormf {
     pub fn binary() -> anyhow::Result<PathBuf> {
         crate::plugins::resolve_tiktok_binary()
     }
 }
 
-impl Provider for Tiktractormf {
+impl Provider for Tikstractormf {
     fn name(&self) -> &str {
-        "tiktractormf"
+        "tikstractormf"
     }
 
     fn is_available(&self) -> bool {

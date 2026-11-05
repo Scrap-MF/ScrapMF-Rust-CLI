@@ -1053,7 +1053,7 @@ fn run_one_sub_scrape_impl(
             "{}",
             crate::i18n::tf(
                 "scraper_tiktok_plugin_not_enabled",
-                &[("pin", crate::plugins::TIKTSTRACTOR_PIN)],
+                &[("pin", crate::plugins::TIKSTRACTOR_PIN)],
             )
         );
     }
@@ -1068,8 +1068,8 @@ fn run_one_sub_scrape_impl(
         let a = p.build_args(&sub_req)?;
         (bin, a)
     } else if is_tiktok && crate::plugins::tiktok_enabled() {
-        let p = crate::providers::tiktractormf::Tiktractormf;
-        let bin = crate::providers::tiktractormf::Tiktractormf::binary()?
+        let p = crate::providers::tikstractormf::Tikstractormf;
+        let bin = crate::providers::tikstractormf::Tikstractormf::binary()?
             .to_string_lossy()
             .into_owned();
         let mut sub_req = req.clone();

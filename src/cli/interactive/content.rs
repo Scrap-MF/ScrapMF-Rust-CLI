@@ -54,7 +54,7 @@ impl ContentKind {
 /// Delegates to the central `crate::sites` registry — adding a site = one registry entry.
 pub(super) fn content_options(site: &str) -> Vec<&'static str> {
     if let Some(spec) = crate::sites::registry::find_by_id(site) {
-        // TikTok stories are only offered when the tiktractormf plugin is
+        // TikTok stories are only offered when the tikstractormf plugin is
         // available; gallery-dl alone does not surface them in the menu.
         if site == "tiktok" && !crate::plugins::tiktok_enabled() {
             return spec
@@ -468,7 +468,7 @@ mod tests {
                 "Instagram_id"
             ]
         );
-        // Stories is offered only when the tiktractormf plugin is available.
+        // Stories is offered only when the tikstractormf plugin is available.
         let tiktok_opts = content_options("tiktok");
         if crate::plugins::tiktok_enabled() {
             assert_eq!(
@@ -603,20 +603,35 @@ mod tests {
     fn tagged_urls_tiktok_real_extractor_paths() {
         let urls = build_tagged_urls("tiktok", "someuser");
         let kinds: Vec<ContentKind> = urls.iter().map(|(k, _)| *k).collect();
-        assert_eq!(
-            kinds,
-            vec![
-                ContentKind::Videos,
-                ContentKind::Photos,
-                ContentKind::Stories,
-                ContentKind::Profile
-            ]
-        );
-        // Videos and Photos share the same posts URL
-        assert_eq!(urls[0].1, "https://www.tiktok.com/@someuser/posts");
-        assert_eq!(urls[1].1, urls[0].1);
-        assert_eq!(urls[2].1, "https://www.tiktok.com/@someuser/stories");
-        assert_eq!(urls[3].1, "https://www.tiktok.com/@someuser/avatar");
+        if crate::plugins::tiktok_enabled() {
+            assert_eq!(
+                kinds,
+                vec![
+                    ContentKind::Videos,
+                    ContentKind::Photos,
+                    ContentKind::Stories,
+                    ContentKind::Profile
+                ]
+            );
+            // Videos and Photos share the same posts URL
+            assert_eq!(urls[0].1, "https://www.tiktok.com/@someuser/posts");
+            assert_eq!(urls[1].1, urls[0].1);
+            assert_eq!(urls[2].1, "https://www.tiktok.com/@someuser/stories");
+            assert_eq!(urls[3].1, "https://www.tiktok.com/@someuser/avatar");
+        } else {
+            assert_eq!(
+                kinds,
+                vec![
+                    ContentKind::Videos,
+                    ContentKind::Photos,
+                    ContentKind::Profile
+                ]
+            );
+            // Videos and Photos share the same posts URL
+            assert_eq!(urls[0].1, "https://www.tiktok.com/@someuser/posts");
+            assert_eq!(urls[1].1, urls[0].1);
+            assert_eq!(urls[2].1, "https://www.tiktok.com/@someuser/avatar");
+        }
     }
 
     #[test]

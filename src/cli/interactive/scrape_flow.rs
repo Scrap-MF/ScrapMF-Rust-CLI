@@ -339,7 +339,7 @@ pub(super) fn jobs_for_account(c: &AccountCtx) -> Result<Vec<ScrapeJob>, String>
         return Ok(jobs);
     }
 
-    // TikTok via tiktractormf: split into photos/videos/stories/profile, each
+    // TikTok via tikstractormf: split into photos/videos/stories/profile, each
     // with its own directory, so files land in the scrapmf tree
     // ({scrapmf_root}/tiktok/{user}/{kind}) instead of the plugin's default
     // `dl/`. Only when the plugin is enabled; otherwise gallery-dl handles
@@ -615,7 +615,7 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
             } else if site == "tiktok"
                 && (!crate::plugins::tiktok_enabled()
                     || !crate::providers::Provider::is_available(
-                        &crate::providers::tiktractormf::Tiktractormf,
+                        &crate::providers::tikstractormf::Tikstractormf,
                     ))
             {
                 let msg = crate::i18n::t("tiktok_plugin_not_enabled_scrape");
@@ -1352,7 +1352,7 @@ pub(super) fn site_options_with_fallbacks(fallbacks: &[&str]) -> Vec<String> {
     }
     // Plugin gating: sites backed by an optional provider only appear when
     // the plugin is installed and enabled (threads → threadstractormf,
-    // tiktok → tiktractormf).
+    // tiktok → tikstractormf).
     if !crate::plugins::threads_enabled() {
         opts.retain(|s| s != "threads");
     }
@@ -1415,11 +1415,11 @@ pub(super) fn prompt_quick_scrape() {
             .map(|k| {
                 let spec = crate::sites::registry::find_by_id(k);
                 let details = if let Some(s) = spec {
-                    // TikTok's backend is the tiktractormf plugin when it is
+                    // TikTok's backend is the tikstractormf plugin when it is
                     // enabled, falling back to gallery-dl otherwise — reflect the
                     // effective backend instead of the static registry value.
                     let backend = if s.id == "tiktok" && crate::plugins::tiktok_enabled() {
-                        "Tiktractormf (plugin)".to_string()
+                        "Tikstractormf (plugin)".to_string()
                     } else {
                         format!("{:?}", s.backend)
                     };

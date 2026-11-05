@@ -4,7 +4,7 @@
 //!
 //! Plugins known to scrapmf:
 //!   - `threads` (upstream package `threadstractormf`)
-//!   - `tiktok`  (upstream package `tiktractormf`)
+//!   - `tiktok`  (upstream package `tikstractormf`)
 //!   - `termux-scan` (external `termux-media-scan` binary, opt-in)
 //!
 //! Layout under `$XDG_DATA_HOME/scrapmf/`:
@@ -32,10 +32,10 @@ use std::path::{Path, PathBuf};
 pub const THREADSTRACTOR_PIN: &str = "1.4.0";
 
 /// Exact upstream release of the tiktok plugin scrapmf installs.
-pub const TIKTSTRACTOR_PIN: &str = "1.4.0";
+pub const TIKSTRACTOR_PIN: &str = "1.4.0";
 
 /// Public PyPI spec used by `pip install` during Enable (tiktok).
-pub const TIKTSTRACTOR_SPEC: &str = "tikstractormf[browser,antibot]==1.4.0";
+pub const TIKSTRACTOR_SPEC: &str = "tikstractormf[browser,antibot]==1.4.0";
 
 // ─── Plugin registry ────────────────────────────────────────────────────────
 
@@ -64,9 +64,9 @@ pub const REGISTRY: &[PluginDef] = &[
     },
     PluginDef {
         id: "tiktok",
-        title: "Tiktractormf",
+        title: "Tikstractormf",
         vendor: "MFApplications",
-        pin: Some(TIKTSTRACTOR_PIN),
+        pin: Some(TIKSTRACTOR_PIN),
     },
     PluginDef {
         id: "termux-scan",
@@ -215,7 +215,7 @@ fn compute_tiktok_state(venv_exists: bool, disabled: bool) -> PluginState {
         (true, false) => {
             let trimmed = version.trim();
             if trimmed.is_empty() {
-                PluginState::Enabled(format!("unknown (pin {TIKTSTRACTOR_PIN})"))
+                PluginState::Enabled(format!("unknown (pin {TIKSTRACTOR_PIN})"))
             } else {
                 PluginState::Enabled(trimmed.to_string())
             }
@@ -336,7 +336,7 @@ pub fn resolve_tiktok_binary() -> anyhow::Result<PathBuf> {
     }
     anyhow::bail!(
         "tiktok plugin is not enabled. Enable it in scrapmf → Plugins (installs \
-         tikstractormf {TIKTSTRACTOR_PIN} into a dedicated scrapmf venv)"
+         tikstractormf {TIKSTRACTOR_PIN} into a dedicated scrapmf venv)"
     )
 }
 
@@ -440,7 +440,7 @@ pub fn install_tiktok() -> anyhow::Result<()> {
     let pip = venv_python_pip(&venv);
     output::print_info(&crate::i18n::tf(
         "plugins_installing_tiktok",
-        &[("pin", TIKTSTRACTOR_PIN)],
+        &[("pin", TIKSTRACTOR_PIN)],
     ));
     crate::process::Executor::run_inherited_checked(&pip.0, &pip.1)?;
 
@@ -463,7 +463,7 @@ pub fn install_tiktok() -> anyhow::Result<()> {
     }
 
     if let Some(vf) = tiktok_version_file() {
-        std::fs::write(&vf, TIKTSTRACTOR_PIN)?;
+        std::fs::write(&vf, TIKSTRACTOR_PIN)?;
     }
 
     if let (Some(src), Some(dst)) = (tiktok_venv_binary(), tiktok_binary_path()) {
@@ -486,7 +486,7 @@ pub fn install_tiktok() -> anyhow::Result<()> {
     crate::config::ensure_tiktok_site()?;
     output::print_success(&crate::i18n::tf(
         "plugins_tiktok_enabled",
-        &[("pin", TIKTSTRACTOR_PIN)],
+        &[("pin", TIKSTRACTOR_PIN)],
     ));
     Ok(())
 }
@@ -583,7 +583,7 @@ fn venv_python_pip(venv: &Path) -> (String, Vec<std::ffi::OsString>) {
             "pip".into(),
             "install".into(),
             "--upgrade".into(),
-            TIKTSTRACTOR_SPEC.into(),
+            TIKSTRACTOR_SPEC.into(),
         ],
     )
 }
