@@ -342,10 +342,8 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
         }
     }
 
-    // Keyring diagnostics. Distribution-agnostic on purpose: the previous
-    // wording hardcoded Arch pacman commands, which is wrong advice for a KDE
-    // user whose actual problem was a locked or absent KWallet.
-    {
+    // Keyring diagnostics (Unix only).
+    if cfg!(unix) {
         let has_secret_tool = which::which("secret-tool").is_ok();
         // `kwallet-query` is the legacy KDE 4 client; a modern Plasma 6 install
         // ships `kwalletctl6` and no legacy binary at all.
@@ -401,6 +399,11 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                 }
                 None => crate::i18n::t("doctor_dbus_none"),
             },
+        });
+    } else {
+        out.push(CheckLine {
+            level: Level::Info,
+            text: "Keyring diagnostics: not applicable on Windows".to_string(),
         });
     }
 
@@ -514,18 +517,13 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                 // and two browsers on the same machine can be two different
                 // accounts. Also warn when the cookie database has gone quiet,
                 // which is what an abandoned profile directory looks like.
-                let mut text = crate::i18n::tf(
+                let text = crate::i18n::tf(
                     "doctor_browser_cookies_used",
                     &[("label", &label), ("id", id)],
                 );
-                let acct = crate::config::cookies::instagram_account_for_channel(id);
-                match &acct {
-                    Some(a) => text.push_str(&crate::i18n::tf(
-                        "doctor_browser_cookies_ig_account",
-                        &[("a", a)],
-                    )),
-                    None => text.push_str(&crate::i18n::t("doctor_browser_cookies_ig_unknown")),
-                }
+                // Instagram account hint intentionally omitted from doctor output:
+                // it leaked the session's account id into screenshots/logs and
+                // is only useful inside a failing scrape's hint, not here.
                 let stale = ch.and_then(cookie_db_stale_days).is_some_and(|d| d >= 14);
                 let line = CheckLine {
                     level: Level::Success,
@@ -538,24 +536,11 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                         text: crate::i18n::tf("doctor_cookie_db_stale", &[("label", &label)]),
                     });
                 }
-                // The captured session is replayed until the browser's database
-                // is written again, but browsers rotate the session cookie on
-                // their own and the site refuses a stale value immediately —
-                // which reads as a missing account rather than a stale session.
-                if let Some(profile) = crate::config::cookies::profile_path(
-                    &crate::config::cookies::auto_profile_name(id),
-                )
-                .filter(|p| p.is_file())
-                    && crate::config::cookies::capture_predates_browser(&profile, id)
-                {
-                    out.push(CheckLine {
-                        level: Level::Warn,
-                        text: crate::i18n::tf(
-                            "doctor_captured_session_older",
-                            &[("label", &label)],
-                        ),
-                    });
-                }
+                // Note: the browser's cookie database is written far more often
+                // than the captured session (every page load touches it), so
+                // comparing mtimes flagged almost every healthy session as stale
+                // and produced a permanent, unactionable warning. The capture is
+                // still refreshed automatically on the next scrape when needed.
             } else {
                 out.push(CheckLine {
                     level: Level::Error,

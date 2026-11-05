@@ -971,14 +971,13 @@ mod tests {
 
     #[test]
     fn kinds_for_site_keeps_only_what_the_site_offers() {
-        let requested: HashSet<String> = ["Stories".to_string()].into_iter().collect();
+        // A kind the site does not offer is dropped, skipping the account.
+        let requested: HashSet<String> = ["Highlights".to_string()].into_iter().collect();
         let ig = kinds_for_site("instagram", &requested);
-        assert_eq!(ig.len(), 1, "instagram has stories");
-        // TikTok has no Stories menu entry, so the account is skipped rather
-        // than silently given something else.
+        assert_eq!(ig.len(), 1, "instagram has highlights");
         assert!(
             kinds_for_site("tiktok", &requested).is_empty(),
-            "tiktok offers no stories"
+            "tiktok offers no highlights"
         );
     }
 

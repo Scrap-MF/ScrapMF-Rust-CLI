@@ -118,7 +118,15 @@ pub fn append_entries(
             let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
         }
     }
-    let fresh: Vec<String> = keys.into_iter().filter(|k| !existing.contains(k)).collect();
+    // Deduplicate the incoming keys first: the provider can emit the same key
+    // more than once in a single run, and the archive must not grow with
+    // redundant rows.
+    let mut seen = std::collections::HashSet::new();
+    let fresh: Vec<String> = keys
+        .into_iter()
+        .filter(|k| !existing.contains(k))
+        .filter(|k| seen.insert(k.clone()))
+        .collect();
     if fresh.is_empty() {
         return Ok(0);
     }

@@ -272,6 +272,7 @@ mod tests {
 
     /// The whole point of canonicalizing: `~/storage/downloads` is a symlink
     /// and the api app can only index the real path behind it.
+    #[cfg(unix)]
     #[test]
     fn resolve_target_follows_symlinks() {
         let real = tmpdir("real");
@@ -289,6 +290,7 @@ mod tests {
     /// Even when the leaf does not exist yet, the symlinked prefix has to be
     /// resolved — otherwise the scanner would be handed the Termux-internal
     /// spelling it cannot read.
+    #[cfg(unix)]
     #[test]
     fn resolve_target_resolves_the_prefix_of_a_missing_directory() {
         let real = tmpdir("prefix_real");
@@ -411,6 +413,7 @@ mod tests {
     /// The regression that made every scan a no-op: without `-r`, MediaStore only
     /// sees files sitting directly in the given directory, and every download lives
     /// in `<output>/<account>/<kind>/`.
+    #[cfg(unix)]
     #[test]
     fn scan_is_recursive_and_aimed_at_the_resolved_path() {
         let real = tmpdir("run_flag_real");

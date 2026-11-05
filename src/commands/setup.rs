@@ -360,6 +360,11 @@ fn install_managed_venv(yes: bool) -> Result<()> {
     // secretstorage is needed to decrypt v11 browser cookies (Brave/Chrome).
     #[cfg(unix)]
     install_args.push("secretstorage".to_string());
+    // yt-dlp is needed by gallery-dl's ytdl downloader fallback (Instagram
+    // stories/reels, etc.). Installing it into the same venv makes
+    // `import yt_dlp` succeed instead of printing
+    // "[downloader.ytdl][error] Cannot import yt-dlp or youtube-dl".
+    install_args.push("yt-dlp".to_string());
     let status = std::process::Command::new(&venv_python)
         .args(&install_args)
         .status()
@@ -479,6 +484,19 @@ fn fetch(dest: &Path, url: &str) -> Result<()> {
             .arg(url)
             .status()
             .context("launch wget")?
+    } else if cfg!(windows) && command_exists("powershell") {
+        std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!(
+                    "Invoke-WebRequest -Uri '{}' -OutFile '{}'",
+                    url,
+                    dest.display()
+                ),
+            ])
+            .status()
+            .context("launch powershell")?
     } else {
         anyhow::bail!("{}", crate::i18n::t("setup_curl_wget_required"));
     };

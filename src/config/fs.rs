@@ -6,8 +6,21 @@ use anyhow::Context;
 /// Atomically write `content` to `path`: temp file in the same directory +
 /// `rename`. Prevents half-written TOML files if the process crashes mid-write.
 pub(super) fn write_atomic(path: &Path, content: &str) -> anyhow::Result<()> {
-    let tmp = path.with_extension(format!("toml.tmp.{}", std::process::id()));
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+    let tmp = path.with_file_name(format!(
+        ".{file_name}.tmp.{}.{}",
+        std::process::id(),
+        unique
+    ));
     std::fs::write(&tmp, content).with_context(|| format!("write {}", tmp.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+    }
     std::fs::rename(&tmp, path)
         .with_context(|| format!("atomic rename {} -> {}", tmp.display(), path.display()))?;
     Ok(())

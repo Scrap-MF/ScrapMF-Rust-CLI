@@ -99,10 +99,13 @@ fn parse_ledger_line(line: &str) -> Option<(String, i64)> {
 /// written only costs a re-download, never a failed scrape.
 pub fn inject(ledger: &Path, keys: &HashSet<String>) -> std::io::Result<usize> {
     let present = existing_keys(ledger);
+    // Deduplicate in case several input keys collapse to the same (post_id, index).
+    let mut seen = HashSet::new();
     let mut fresh: Vec<(String, i64)> = keys
         .iter()
         .filter_map(|k| parse_key(k))
         .filter(|(post_id, index)| !present.contains(&key(post_id, *index)))
+        .filter(|pair| seen.insert(pair.clone()))
         .collect();
     if fresh.is_empty() {
         return Ok(0);

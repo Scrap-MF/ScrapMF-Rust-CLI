@@ -54,6 +54,16 @@ impl ContentKind {
 /// Delegates to the central `crate::sites` registry — adding a site = one registry entry.
 pub(super) fn content_options(site: &str) -> Vec<&'static str> {
     if let Some(spec) = crate::sites::registry::find_by_id(site) {
+        // TikTok stories are only offered when the tiktractormf plugin is
+        // available; gallery-dl alone does not surface them in the menu.
+        if site == "tiktok" && !crate::plugins::tiktok_enabled() {
+            return spec
+                .content_kinds
+                .iter()
+                .copied()
+                .filter(|k| *k != "Stories")
+                .collect();
+        }
         return spec.content_kinds.to_vec();
     }
     vec!["All", "Posts"]
@@ -113,6 +123,10 @@ pub(super) fn build_tagged_urls(site: &str, username: &str) -> Vec<(ContentKind,
     if let Some(spec) = crate::sites::registry::find_by_id(site) {
         let mut out = Vec::with_capacity(spec.url_templates.len());
         for (label, tmpl) in spec.url_templates {
+            // Skip TikTok stories when the plugin is not available.
+            if site == "tiktok" && *label == "Stories" && !crate::plugins::tiktok_enabled() {
+                continue;
+            }
             let kind = ContentKind::from_label(label).unwrap_or(ContentKind::Posts);
             let url = tmpl.replace("{username}", username);
             out.push((kind, url));
@@ -454,14 +468,16 @@ mod tests {
                 "Instagram_id"
             ]
         );
-        assert_eq!(
-            content_options("tiktok"),
-            // Stories hidden — gallery-dl upstream limitation, not fixed by the
-            // 1.32.9 -> 1.32.17 bumps. Re-checked against v1.32.17: the full set
-            // of `Tiktok*Extractor` class names is byte-identical to v1.32.16,
-            // so `TiktokStoriesExtractor` still does not exist.
-            vec!["All", "Videos", "Photos", "Profile"]
-        );
+        // Stories is offered only when the tiktractormf plugin is available.
+        let tiktok_opts = content_options("tiktok");
+        if crate::plugins::tiktok_enabled() {
+            assert_eq!(
+                tiktok_opts,
+                vec!["All", "Videos", "Photos", "Stories", "Profile"]
+            );
+        } else {
+            assert_eq!(tiktok_opts, vec!["All", "Videos", "Photos", "Profile"]);
+        }
         assert_eq!(content_options("twitter"), vec!["All", "Media", "Profile"]);
         assert_eq!(content_options("vsco"), vec!["All", "Media", "Profile"]);
         assert_eq!(
@@ -525,26 +541,40 @@ mod tests {
              listed: a plain scrape is where people most want the id"
         );
         let tt = resolve_kinds("tiktok", &picked);
-        assert_eq!(
-            tt,
-            // Stories hidden from the tiktok menu (upstream limitation)
-            vec![
-                ContentKind::Videos,
-                ContentKind::Photos,
-                ContentKind::Profile
-            ]
-        );
+        if crate::plugins::tiktok_enabled() {
+            assert_eq!(
+                tt,
+                vec![
+                    ContentKind::Videos,
+                    ContentKind::Photos,
+                    ContentKind::Stories,
+                    ContentKind::Profile
+                ]
+            );
+        } else {
+            assert_eq!(
+                tt,
+                vec![
+                    ContentKind::Videos,
+                    ContentKind::Photos,
+                    ContentKind::Profile
+                ]
+            );
+        }
     }
 
     #[test]
     fn resolve_kinds_all_mixed_with_others_expands_anyway() {
         // "All" wins even if combined with explicit kinds — no duplicates.
-        // TikTok expands to 3 kinds now (Stories hidden).
         let picked = vec!["All".to_string(), "Videos".to_string()];
         let kinds = resolve_kinds("tiktok", &picked);
-        assert_eq!(kinds.len(), 3);
+        let expected = if crate::plugins::tiktok_enabled() {
+            4
+        } else {
+            3
+        };
+        assert_eq!(kinds.len(), expected);
         assert!(kinds.contains(&ContentKind::Profile));
-        assert!(!kinds.contains(&ContentKind::Stories));
     }
 
     #[test]

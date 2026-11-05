@@ -206,13 +206,10 @@ fn browser_cookies_menu(current: Option<&str>) {
         if let Some(p) = &b.profile {
             detail.push(crate::i18n::tf("profile_colon", &[("profile", p)]));
         }
-        match crate::config::cookies::instagram_account_for_channel(b.id) {
-            Some(acct) => detail.push(crate::i18n::tf(
-                "instagram_account_colon",
-                &[("account", &acct)],
-            )),
-            None => detail.push(crate::i18n::t("instagram_account_unknown_first_scrape")),
-        }
+        // Instagram account hint intentionally omitted here: it only made
+        // sense for Instagram runs and leaked the session's account id into
+        // the browser-selection UI. The hint still surfaces on a failing
+        // Instagram scrape via session_hint().
         if current == Some(b.id) {
             detail.push(crate::i18n::t("currently_selected_arrow"));
         }

@@ -95,7 +95,12 @@ impl Executor {
             return cached.clone();
         }
         let res = which::which(name).ok();
-        if let Ok(mut guard) = cache.lock() {
+        // Only cache successful lookups: a binary may be installed later in
+        // the same process (setup/plugin enable), and a cached `None` would
+        // hide it until restart.
+        if res.is_some()
+            && let Ok(mut guard) = cache.lock()
+        {
             guard.insert(name.to_string(), res.clone());
         }
         res

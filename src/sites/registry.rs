@@ -85,7 +85,7 @@ pub const TIKTOK: SiteSpec = SiteSpec {
     patterns: &["tiktok.com"],
     backend: BackendKind::GalleryDl,
     ensure_fn: ensure_tiktok_site,
-    content_kinds: &["All", "Videos", "Photos", "Profile"],
+    content_kinds: &["All", "Videos", "Photos", "Stories", "Profile"],
     url_templates: &[
         ("Videos", "https://www.tiktok.com/@{username}/posts"),
         ("Photos", "https://www.tiktok.com/@{username}/posts"),

@@ -2,8 +2,10 @@
 //! environment (never the user's system Python) — same philosophy as the
 //! bundled gallery-dl backend.
 //!
-//! One plugin today: `threads` (upstream package `threadstractormf`,
-//! repository <https://github.com/ExtractorsMF/ThreadstractorMF>).
+//! Plugins known to scrapmf:
+//!   - `threads` (upstream package `threadstractormf`)
+//!   - `tiktok`  (upstream package `tiktractormf`)
+//!   - `termux-scan` (external `termux-media-scan` binary, opt-in)
 //!
 //! Layout under `$XDG_DATA_HOME/scrapmf/`:
 //! ```text
@@ -27,13 +29,13 @@ use std::path::{Path, PathBuf};
 
 /// Exact upstream release scrapmf installs. Bump manually per scrapmf
 /// release (same policy as `application::backend::GALLERY_DL_PIN`).
-pub const THREADSTRACTOR_PIN: &str = "v1.2.0";
+pub const THREADSTRACTOR_PIN: &str = "1.4.0";
 
 /// Exact upstream release of the tiktok plugin scrapmf installs.
-pub const TIKTSTRACTOR_PIN: &str = "1.2.0";
+pub const TIKTSTRACTOR_PIN: &str = "1.4.0";
 
 /// Public PyPI spec used by `pip install` during Enable (tiktok).
-pub const TIKTSTRACTOR_SPEC: &str = "tikstractormf[browser,antibot]==1.2.0";
+pub const TIKTSTRACTOR_SPEC: &str = "tikstractormf[browser,antibot]==1.4.0";
 
 // ─── Plugin registry ────────────────────────────────────────────────────────
 
@@ -47,6 +49,9 @@ pub struct PluginDef {
     pub title: &'static str,
     /// Vendor line, e.g. "MFApplications".
     pub vendor: &'static str,
+    /// Pinned version this plugin installs, if any (e.g. "v1.2.0").
+    /// `None` for plugins that wrap an external binary (termux-scan).
+    pub pin: Option<&'static str>,
 }
 
 /// Every plugin scrapmf knows about, in menu order.
@@ -55,16 +60,19 @@ pub const REGISTRY: &[PluginDef] = &[
         id: "threads",
         title: "ThreadstractorMF",
         vendor: "MFApplications",
+        pin: Some(THREADSTRACTOR_PIN),
     },
     PluginDef {
         id: "tiktok",
         title: "Tiktractormf",
         vendor: "MFApplications",
+        pin: Some(TIKTSTRACTOR_PIN),
     },
     PluginDef {
         id: "termux-scan",
         title: "Termux MediaScan",
         vendor: "Termux",
+        pin: None,
     },
 ];
 
@@ -74,12 +82,9 @@ pub fn by_id(id: &str) -> Option<&'static PluginDef> {
 }
 
 /// Public git source used by `pip install` during Enable.
-pub const THREADSTRACTOR_REPO: &str = "https://github.com/ExtractorsMF/ThreadstractorMF.git";
+pub const THREADSTRACTOR_REPO: &str = "https://github.com/ExtractorsMF/ThreadstractorMF";
 
-const PKG_SPEC: &str = concat!(
-    "threadstractormf[browser] @ git+",
-    "https://github.com/ExtractorsMF/ThreadstractorMF.git@v1.2.0"
-);
+const PKG_SPEC: &str = "threadstractormf[browser]==1.4.0";
 
 /// Lifecycle state of the threads plugin.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,7 +126,12 @@ fn tiktok_version_file() -> Option<PathBuf> {
 }
 
 fn tiktok_binary_path() -> Option<PathBuf> {
-    dirs::data_dir().map(|p| p.join("scrapmf/bin/tikstractormf"))
+    let name = if cfg!(windows) {
+        "tikstractormf.exe"
+    } else {
+        "tikstractormf"
+    };
+    dirs::data_dir().map(|p| p.join("scrapmf/bin").join(name))
 }
 
 fn tiktok_venv_binary() -> Option<PathBuf> {
@@ -137,7 +147,12 @@ fn tiktok_venv_binary() -> Option<PathBuf> {
 /// Managed entry point exposed next to the gallery-dl backend:
 /// `…/scrapmf/bin/threadstractormf`.
 fn managed_binary_path() -> Option<PathBuf> {
-    dirs::data_dir().map(|p| p.join("scrapmf/bin/threadstractormf"))
+    let name = if cfg!(windows) {
+        "threadstractormf.exe"
+    } else {
+        "threadstractormf"
+    };
+    dirs::data_dir().map(|p| p.join("scrapmf/bin").join(name))
 }
 
 /// The actual executable inside the venv (platform-aware).
@@ -344,8 +359,9 @@ pub fn install() -> anyhow::Result<()> {
         "plugins_creating_venv",
         &[("path", &venv.display().to_string())],
     ));
+    let python = if cfg!(windows) { "python" } else { "python3" };
     crate::process::Executor::run_inherited_checked(
-        "python3",
+        python,
         &["-m".into(), "venv".into(), venv.as_os_str().to_owned()],
     )?;
 
@@ -415,8 +431,9 @@ pub fn install_tiktok() -> anyhow::Result<()> {
         "plugins_creating_venv",
         &[("path", &venv.display().to_string())],
     ));
+    let python = if cfg!(windows) { "python" } else { "python3" };
     crate::process::Executor::run_inherited_checked(
-        "python3",
+        python,
         &["-m".into(), "venv".into(), venv.as_os_str().to_owned()],
     )?;
 
@@ -594,15 +611,15 @@ mod tests {
             PluginState::NotInstalled
         );
         assert_eq!(
-            compute_state_with(false, true, "v1.2.0"),
+            compute_state_with(false, true, "v1.4.0"),
             PluginState::NotInstalled
         );
         assert_eq!(
-            compute_state_with(true, true, "v1.2.0"),
+            compute_state_with(true, true, "v1.4.0"),
             PluginState::Disabled
         );
-        match compute_state_with(true, false, "v1.2.0") {
-            PluginState::Enabled(v) => assert_eq!(v, "v1.2.0"),
+        match compute_state_with(true, false, "v1.4.0") {
+            PluginState::Enabled(v) => assert_eq!(v, "v1.4.0"),
             other => panic!("expected Enabled, got {other:?}"),
         }
         // empty/missing version file falls back to the pin marker
@@ -614,8 +631,8 @@ mod tests {
 
     #[test]
     fn pkg_spec_pins_version() {
-        assert!(PKG_SPEC.contains("@v1.2.0"));
-        assert!(PKG_SPEC.starts_with("threadstractormf[browser] @ git+"));
+        assert!(PKG_SPEC.contains("==1.4.0"));
+        assert!(PKG_SPEC.starts_with("threadstractormf[browser]"));
     }
 
     #[test]

@@ -88,6 +88,18 @@ fn main() -> Result<()> {
             ensure_app_config();
             commands::config::run(command).context("config command failed")?;
         }
+        Some(Commands::Sites { command }) => {
+            ensure_app_config();
+            commands::sites::run(command).context("sites command failed")?;
+        }
+        Some(Commands::Profiles { command }) => {
+            ensure_app_config();
+            commands::profiles::run(command).context("profiles command failed")?;
+        }
+        Some(Commands::Plugins { command }) => {
+            ensure_app_config();
+            commands::plugins::run(command).context("plugins command failed")?;
+        }
         Some(Commands::Doctor) => {
             ensure_app_config();
             commands::doctor::run(cli.verbose).context("doctor failed")?;

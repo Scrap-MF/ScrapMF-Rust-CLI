@@ -175,7 +175,7 @@ pub fn ensure_example_sites() -> anyhow::Result<()> {
         archive: None,
         extractor,
         // Naming: posts/reels → post_id, stories/highlights inner → media_id, date %Y-%m-%d verified via gallery-dl -K
-        // _num:02d preserves carrousel order (01,02,03) with _ separator (only for posts/reels, NOT highlights)
+        // _num:02d preserves carousel order (01,02,03) with _ separator (only for posts/reels, NOT highlights)
         // HIGHLIGHTS: {media_id}.{extension} inside highlights/{post_id}{highlight_title:?_//}/ — no date, no num (archive dedup); raw title kept visible (emoji included), empty titles collapse to just {post_id}
         filename_template: Some("{date:%Y-%m-%d}_{post_id}_{num:02d}.{extension}".to_string()),
         // Tree: {scrapmf_root}/{category}/{username}/{subcategory} → example/instagram/example_user/posts
@@ -195,19 +195,19 @@ pub fn ensure_example_sites() -> anyhow::Result<()> {
 # Auto-matched when URL contains `pattern`. CLI --preset can also force it.
 #
 # Instagram strategy — structured tree (verified via gallery-dl -K: category=instagram, subcategory=posts/reels/highlights):
-#   PERFIL/  (scrapmf_root = profile name, e.g. example; output default ~/scrapmf)
+#   PROFILE/  (scrapmf_root = profile name, e.g. example; output default ~/scrapmf)
 #   └── instagram/  (category)
-#       └── CUENTA/  ({username} account handle)
-#       ├── posts/    → {date:%Y-%m-%d}_{post_id}_{num:02d}.{ext}  (DATE first so alphabetical == chronological; _num:02d for carrousel order 01,02,03)
+#       └── ACCOUNT/  ({username} account handle)
+#       ├── posts/    → {date:%Y-%m-%d}_{post_id}_{num:02d}.{ext}  (DATE first so alphabetical == chronological; _num:02d for carousel order 01,02,03)
 #       ├── reels/    → {date:%Y-%m-%d}_{post_id}_{num:02d}.{ext}
 #       ├── highlights/{post_id}{highlight_title:?_//}/ → {media_id}.{ext}  (NO date, NO num; identity via media_id, highlight via id+raw title)
 #       ├── stories/2026/10-october/ → {post_id}_{num:02d}.{ext}  (ephemeral 24h; year/month lowercase via f-string formatter)
 #       └── profile/ → {username}_{media_id}.{ext}  (avatar; {media_id}=profile_pic_id changes with avatar)
 #   Tree root: {scrapmf_root}(PROFILE, e.g. example) / {category}(network) / {username}(account) / content
 #   Actual paths:
-#     posts/reels: ~/scrapmf/PERFIL/instagram/{username}/{posts,reels,...}
-#     highlights:  ~/scrapmf/PERFIL/instagram/{username}/highlights/{post_id}{highlight_title:?_//}/{media_id}.{ext}
-#     stories:     ~/scrapmf/PERFIL/instagram/{username}/stories/{year}/{month-lower}/{post_id}_{num}.{ext}
+#     posts/reels: ~/scrapmf/PROFILE/instagram/{username}/{posts,reels,...}
+#     highlights:  ~/scrapmf/PROFILE/instagram/{username}/highlights/{post_id}{highlight_title:?_//}/{media_id}.{ext}
+#     stories:     ~/scrapmf/PROFILE/instagram/{username}/stories/{year}/{month-lower}/{post_id}_{num}.{ext}
 #   {scrapmf_root} injected at runtime via -o extractor.keywords.scrapmf_root=<profile> (fallback "default" without profile)
 #   NOTE: data downloaded before this structure lives under the old layout — move it manually if desired.
 #   Sub-URLs: https://www.instagram.com/{username}/ , /reels/ , /highlights/ , /stories/{username}/ , /{username}/avatar
@@ -241,8 +241,8 @@ pub fn ensure_example_sites() -> anyhow::Result<()> {
 #     ~/.config/scrapmf/archive/<site>/<account>.jsonl — dedup is automatic;
 #     disable with [general] archive = false or `scrapmf scrape --no-archive`.
 #   extra_args = ["--restrict-filenames", "auto", "--proxy", "http://..."]  # allow-list: --proxy, --user-agent, --sleep, --sleep-request, --sleep-429, --limit-rate, --cookies, --cookies-from-browser, --restrict-filenames, --destination, --get-urls (--exec forbidden; ;|&$><` rejected)
-#   filename_template = "{date:%Y-%m-%d}_{post_id}_{num:02d}.{extension}"  # → gallery-dl -o filename= (date first; _num:02d preserves carrousel order 01,02,03)
-#   directory_template = ["{scrapmf_root}", "{category}", "{username}", "{subcategory}"]  # → PERFIL/instagram/CUENTA/posts
+#   filename_template = "{date:%Y-%m-%d}_{post_id}_{num:02d}.{extension}"  # → gallery-dl -o filename= (date first; _num:02d preserves carousel order 01,02,03)
+#   directory_template = ["{scrapmf_root}", "{category}", "{username}", "{subcategory}"]  # → PROFILE/instagram/ACCOUNT/posts
 #   media_id = "..."                       # custom media id filter
 #   include_highlights = true              # instagram highlights toggle (fetch all highlights)
 #   highlights = ["id1", "id2"]            # list of highlight ids (empty = all)
@@ -377,9 +377,9 @@ pub fn ensure_tiktok_site() -> anyhow::Result<()> {
 # File: ~/.config/scrapmf/sites/tiktok.toml (0o600, dir 0o700)
 #
 # TikTok strategy (verified via gallery-dl 1.32.17 --list-extractors + source):
-#   PERFIL/  (scrapmf_root = profile name; output default ~/scrapmf)
+#   PROFILE/  (scrapmf_root = profile name; output default ~/scrapmf)
 #   └── tiktok/
-#       └── CUENTA/  ({user} uniqueId)
+#       └── ACCOUNT/  ({user} uniqueId)
 #           ├── videos/    → {date}_{id}{num}.{ext}   (post_type != image — conditional directory; DATE first so alphabetical == chronological)
 #           ├── photos/    → {date}_{id}_{num}.{ext}  (post_type == 'image')
 #           ├── stories/   → {id}_{date}{num}.{ext}   (/@USER/stories, ephemeral 24h)
@@ -520,9 +520,9 @@ pub fn ensure_twitter_site() -> anyhow::Result<()> {
 # File: ~/.config/scrapmf/sites/twitter.toml (0o600, dir 0o700)
 #
 # Twitter/X strategy (verified via gallery-dl 1.32.17 --list-extractors + source):
-#   PERFIL/  (scrapmf_root = profile name; output default ~/scrapmf)
+#   PROFILE/  (scrapmf_root = profile name; output default ~/scrapmf)
 #   └── twitter/
-#       └── CUENTA/  ({user[name]})
+#       └── ACCOUNT/  ({user[name]})
 #           ├── videos/    → {tweet_id}_{date}_{num:02d}.{ext}   (/@USER/media default)
 #           ├── photos/    → {tweet_id}_{date}_{num:02d}.{ext}   (interactive mode: second pass with file-filter type=='photo')
 #           └── profile/   → avatar_{tweet_id}.{ext}  (/@USER/photo; id changes per pic version)
@@ -633,9 +633,9 @@ pub fn ensure_vsco_site() -> anyhow::Result<()> {
 # File: ~/.config/scrapmf/sites/vsco.toml (0o600, dir 0o700)
 #
 # VSCO strategy (verified via gallery-dl 1.32.17 --list-extractors + source; extractor byte-identical to v1.32.16):
-#   PERFIL/  (scrapmf_root = profile name; output default ~/scrapmf)
+#   PROFILE/  (scrapmf_root = profile name; output default ~/scrapmf)
 #   └── vsco/
-#       └── CUENTA/  ({user} handle)
+#       └── ACCOUNT/  ({user} handle)
 #           ├── gallery/   → {date:%Y-%m-%d}_{id}.{ext}  (/@USER/gallery — photos AND videos together, single pass, date first)
 #           └── profile/   → avatar_{id}.{ext}           (/@USER/avatar; {id}=profileImageId changes per pic version)
 #
@@ -697,10 +697,10 @@ pub fn ensure_threads_site() -> anyhow::Result<()> {
 # `threadstractor` provider (pip install threadstractor).
 #
 # Threads strategy (via threadstractor, verified 2025-08 with Brave cookies):
-#   PERFIL/  (scrapmf_root = profile name; output default ~/scrapmf)
+#   PROFILE/  (scrapmf_root = profile name; output default ~/scrapmf)
 #   └── threads/
-#       └── CUENTA/  ({username} handle)
-#           ├── posts/    → {date:%Y-%m-%d}_{post_id}_{num:02d}.{ext}  (DATE first so alphabetical == chronological; _num:02d for carrousel 01,02,03)
+#       └── ACCOUNT/  ({username} handle)
+#           ├── posts/    → {date:%Y-%m-%d}_{post_id}_{num:02d}.{ext}  (DATE first so alphabetical == chronological; _num:02d for carousel 01,02,03)
 #           └── profile/  → {username}_{media_id}.{ext}  (avatar; media_id changes per avatar version)
 #   Variables (same as instagram for compat): {date:%Y-%m-%d}, {post_id}, {media_id} (=post_id_1), {num:02d}, {username}, {category}=threads, {subcategory}=posts/profile, {extension}
 #   Chronological order: keep date first. To mimic gallery-dl reordering, edit filename_template:

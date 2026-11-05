@@ -302,7 +302,7 @@ pub fn sub_url_label(url: &str) -> &'static str {
     if crate::application::instagram_id::is_info_url(url) {
         return "Instagram_id";
     }
-    if url.contains("/stories/") {
+    if url.contains("/stories") {
         return "stories";
     }
     if url.contains("/highlights/") {
@@ -431,11 +431,10 @@ pub fn scrape_with_hooks(
     {
         f(urls.iter().map(|u| sub_url_label(u).to_string()).collect());
     }
-    if let Some(hooks) = hooks.as_deref_mut() {
-        let banner = session_banner(&req);
-        let f = &mut hooks.on_log;
-        f(&banner);
-    }
+    // Session banner intentionally suppressed: the account/origin used to be
+    // printed into the log panel on every run, but that line is noise for the
+    // user and leaked session details into screenshots. The information is
+    // still available via `session_hint` when a scrape actually fails.
     for (i, sub_url) in urls.into_iter().enumerate() {
         if let Some(hooks) = hooks.as_deref_mut()
             && let Some(f) = hooks.on_step.as_mut()
@@ -683,7 +682,22 @@ fn is_not_found(msg: &str) -> bool {
 /// `(origin, account)`. `origin` is empty for an anonymous run. `account` is
 /// `None` when the session carries no `ds_user_id` — genuinely unknown, which
 /// is different from "no session" and must not be rendered as the same thing.
+fn is_instagram_request(req: &ScrapeRequest) -> bool {
+    req.preset.as_deref() == Some("instagram")
+        || req.url.contains("instagram.com")
+        || req.extra_urls.iter().any(|u| u.contains("instagram.com"))
+}
+
 fn session_identity(req: &ScrapeRequest) -> (String, Option<String>) {
+    // The account hint is only meaningful for Instagram; showing an Instagram
+    // account on a TikTok/Threads run is noise, not information.
+    if !is_instagram_request(req) {
+        return match (&req.cookies_file, &req.cookies_from_browser) {
+            (Some(file), _) => (format!("cookie file {}", file.display()), None),
+            (None, Some(browser)) => (format!("browser {browser}"), None),
+            (None, None) => (String::new(), None),
+        };
+    }
     match (&req.cookies_file, &req.cookies_from_browser) {
         (Some(file), _) => (
             format!("cookie file {}", file.display()),
@@ -697,24 +711,17 @@ fn session_identity(req: &ScrapeRequest) -> (String, Option<String>) {
     }
 }
 
-/// One line naming the session, printed before any sub-extractor runs.
-///
-/// Until v1.11.2 the only place scrapmf ever named the Instagram account was
-/// inside an error message, so choosing the wrong profile was something you
-/// could only discover by failing. Switching accounts in the browser also used
-/// to be invisible: the capture was replayed until it covered the target, and
-/// the previous account kept answering for the new one. Naming it up front
-/// costs one line and removes both blind spots.
-fn session_banner(req: &ScrapeRequest) -> String {
-    let (origin, account) = session_identity(req);
-    if origin.is_empty() {
-        return "session: none — only public content is reachable".to_string();
-    }
-    match account {
-        Some(a) => format!("session: Instagram account {a} via {origin}"),
-        None => format!("session: {origin} (no Instagram account id in it)"),
-    }
-}
+// One line naming the session, printed before any sub-extractor runs.
+//
+// Until v1.11.2 the only place scrapmf ever named the Instagram account was
+// inside an error message, so choosing the wrong profile was something you
+// could only discover by failing. Switching accounts in the browser also used
+// to be invisible: the capture was replayed until it covered the target, and
+// the previous account kept answering for the new one. Naming it up front
+// costs one line and removes both blind spots.
+// session_banner removed: the session line is no longer printed into the log
+// panel (see the suppression note at the call site). session_identity() is
+// retained for session_hint() which still names the account on failure.
 
 /// Report what is *known* about an unclassifiable "not found", and nothing more.
 ///
@@ -744,15 +751,24 @@ fn session_hint(req: &ScrapeRequest, sub_url: &str, ran_before: bool) -> Option<
     // Anonymous: the one case where the cause really is knowable, because
     // without a session nothing private or follower-gated is reachable at all.
     if origin.is_empty() {
+        let account_word = if is_instagram_request(req) {
+            "logged-in Instagram account"
+        } else {
+            "logged-in account"
+        };
         return Some(format!(
             "no session was sent, so only public content is reachable — \
-             the {kind} pass on this URL needs a logged-in Instagram account"
+             the {kind} pass on this URL needs a {account_word}"
         ));
     }
 
-    let head = match &account {
-        Some(a) => format!("sent Instagram account {a} via {origin}"),
-        None => format!("sent {origin} (no Instagram account id in it)"),
+    let head = if is_instagram_request(req) {
+        match &account {
+            Some(a) => format!("sent Instagram account {a} via {origin}"),
+            None => format!("sent {origin} (no Instagram account id in it)"),
+        }
+    } else {
+        format!("sent {origin}")
     };
     let mut lines = vec![match crate::application::backend::installed_version() {
         Some(v) => format!("{head}, gallery-dl {v}"),
@@ -953,6 +969,24 @@ fn resolve_cookie_browser(req: &mut ScrapeRequest) {
 
 /// Translate `browser[:profile]` into `family[:profile-or-resolved-dir]`.
 fn gallery_dl_cookie_spec(browser: &str) -> Option<String> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static CACHE: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
+    if let Ok(guard) = CACHE.lock()
+        && let Some(map) = guard.as_ref()
+        && let Some(v) = map.get(browser)
+    {
+        return v.clone();
+    }
+    let result = gallery_dl_cookie_spec_uncached(browser);
+    if let Ok(mut guard) = CACHE.lock() {
+        let map = guard.get_or_insert_with(HashMap::new);
+        map.insert(browser.to_string(), result.clone());
+    }
+    result
+}
+
+fn gallery_dl_cookie_spec_uncached(browser: &str) -> Option<String> {
     let (label, profile) = match browser.split_once(':') {
         Some((label, profile)) => (label, Some(profile)),
         None => (browser, None),
@@ -1014,6 +1048,15 @@ fn run_one_sub_scrape_impl(
         );
     }
     let is_tiktok = is_tiktok_url(url);
+    if is_tiktok && !crate::plugins::tiktok_enabled() {
+        anyhow::bail!(
+            "{}",
+            crate::i18n::tf(
+                "scraper_tiktok_plugin_not_enabled",
+                &[("pin", crate::plugins::TIKTSTRACTOR_PIN)],
+            )
+        );
+    }
     let (binary, mut args) = if is_threads {
         let p = crate::providers::threadstractor::Threadstractor;
         let bin = crate::providers::threadstractor::Threadstractor::binary()?
@@ -1032,7 +1075,9 @@ fn run_one_sub_scrape_impl(
         let mut sub_req = req.clone();
         sub_req.url = url.to_string();
         apply_sub_url_overrides(&mut sub_req, url);
-        resolve_cookie_browser(&mut sub_req);
+        // The tiktok plugin only accepts a bare browser name (e.g.
+        // `brave-origin`), not gallery-dl's `brave:/path` profile spec, so
+        // leave cookies_from_browser untouched here.
         let a = p.build_args(&sub_req)?;
         (bin, a)
     } else {
@@ -1236,23 +1281,12 @@ mod tests {
         assert!(hint.contains("next: retry this URL on its own"), "{hint}");
     }
 
-    /// Every run names the account it is about to send. Switching profiles in
-    /// the browser was invisible until v1.11.2, and the only place the account
-    /// was ever named was inside this error.
-    #[test]
-    fn the_banner_names_the_account_before_anything_runs() {
-        let (req, _dir) = req_with_instagram_session();
-        let banner = super::session_banner(&req);
-        assert!(banner.contains("76493942756"), "{banner}");
-    }
-
     #[test]
     fn an_anonymous_run_says_so() {
         let req = base_req();
         let hint = super::session_hint(&req, "https://www.instagram.com/demo_account/", false)
             .expect("an anonymous run gets a note too");
         assert!(hint.contains("no session was sent"), "{hint}");
-        assert!(super::session_banner(&req).contains("none"));
     }
 
     /// The pin and the installed binary drift apart silently, because only

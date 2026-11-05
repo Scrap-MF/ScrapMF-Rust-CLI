@@ -54,6 +54,15 @@ pub fn sanitize_component_with_dot(name: &str, max_len: usize, default: &str) ->
 /// exactly as written rather than guessed at.
 pub fn expand_tilde(path: &Path) -> PathBuf {
     let s = path.to_string_lossy();
+    // Windows: expand a leading %VAR% (e.g. %LOCALAPPDATA%\scrapmf).
+    #[cfg(windows)]
+    if let Some(rest) = s.strip_prefix('%')
+        && let Some((var, tail)) = rest.split_once('%')
+        && let Ok(val) = std::env::var(var)
+    {
+        let tail = tail.strip_prefix('\\').unwrap_or(tail);
+        return PathBuf::from(val).join(tail);
+    }
     let Some(home) = dirs::home_dir() else {
         return path.to_path_buf();
     };

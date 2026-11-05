@@ -240,8 +240,8 @@ pub fn save_profile(name: &str, netscape_content: &str) -> Result<PathBuf, Strin
     std::fs::create_dir_all(&dir).map_err(|e| format!("create cookies dir: {e}"))?;
     crate::config::restrict_perms(&dir, true);
     let path = profile_path(name).ok_or("invalid profile name")?;
-    std::fs::write(&path, netscape_content).map_err(|e| format!("write profile: {e}"))?;
-    crate::config::restrict_perms(&path, false);
+    crate::config::write_config_file(&path, netscape_content)
+        .map_err(|e| format!("write profile: {e}"))?;
     Ok(path)
 }
 
@@ -461,8 +461,14 @@ pub fn profile_summary(name: &str) -> Result<String, String> {
 // ─── Firefox capture ────────────────────────────────────────────────────────
 
 fn newest_firefox_cookie_db() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    let root = home.join(".mozilla").join("firefox");
+    let root = if cfg!(windows) {
+        dirs::config_dir()?
+            .join("Mozilla")
+            .join("Firefox")
+            .join("Profiles")
+    } else {
+        dirs::home_dir()?.join(".mozilla").join("firefox")
+    };
     let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
     for entry in std::fs::read_dir(&root).ok()?.flatten() {
         let db = entry.path().join("cookies.sqlite");
@@ -615,33 +621,34 @@ fn sqlite_read_rows(
         return Ok(tsv_to_rows(&String::from_utf8_lossy(&out.stdout)));
     }
 
-    // 2) python3 stdlib (sqlite3 ships with every distro's python3)
+    // 2) python stdlib (sqlite3 ships with every CPython)
     let script = "import sqlite3,sys\n\
 c = sqlite3.connect(sys.argv[1])\n\
 [print(*r, sep='\t') for r in c.execute(sys.argv[2])]";
-    if let Ok(out) = std::process::Command::new("python3")
-        .arg("-c")
-        .arg(script)
-        .arg(db_copy)
-        .arg(&sql)
-        .output()
-    {
-        if out.status.success() {
-            let text = String::from_utf8_lossy(&out.stdout).into_owned();
-            if !text.trim().is_empty() {
-                return Ok(tsv_to_rows(&text));
+    for py in ["python3", "python"] {
+        if let Ok(out) = std::process::Command::new(py)
+            .arg("-c")
+            .arg(script)
+            .arg(db_copy)
+            .arg(&sql)
+            .output()
+        {
+            if out.status.success() {
+                let text = String::from_utf8_lossy(&out.stdout).into_owned();
+                if !text.trim().is_empty() {
+                    return Ok(tsv_to_rows(&text));
+                }
             }
+            return Err(format!(
+                "{py} reader failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
         }
-        return Err(format!(
-            "python3 reader failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
     }
 
     Err(
-        "cannot read the cookies database: neither 'sqlite3' nor 'python3' is available\n  \
-         help: install one of them, e.g. 'pacman -S sqlite' (Arch), 'apt install sqlite3' \
-         (Debian/Ubuntu), 'dnf install sqlite' (Fedora)\n  \
+        "cannot read the cookies database: neither 'sqlite3' nor 'python' is available\n  \
+         help: install one of them (sqlite3 CLI or Python with sqlite3 module)\n  \
          note: this is a missing tool, not a decryption problem — the cookies on disk are fine"
             .to_string(),
     )

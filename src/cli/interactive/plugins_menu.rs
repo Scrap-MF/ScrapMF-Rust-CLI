@@ -3,7 +3,7 @@
 //! from the plugin registry so future plugins slot in without new menus.
 
 use crate::cli::interactive::{clear_screen, select_menu};
-use crate::plugins::{self, PluginDef, PluginState, REGISTRY, THREADSTRACTOR_PIN};
+use crate::plugins::{self, PluginDef, PluginState, REGISTRY};
 
 /// Entry point from the main menu.
 pub(super) fn menu() {
@@ -30,13 +30,13 @@ pub(super) fn menu() {
 }
 
 fn plugin_submenu(def: &PluginDef) {
-    if def.id == crate::i18n::t("termux_scan") {
+    if def.id == "termux-scan" {
         termux_scan_submenu(def);
         return;
     }
-    let state = state_for(def);
     loop {
         clear_screen();
+        let state = state_for(def);
         let status = match &state {
             PluginState::NotInstalled => crate::i18n::t("not_installed"),
             PluginState::Disabled => crate::i18n::t("disabled_files_kept"),
@@ -52,22 +52,45 @@ fn plugin_submenu(def: &PluginDef) {
         println!("   {status}");
         println!();
 
+        // Label for the disable action differs by plugin: threads is fully
+        // hidden when disabled, while tiktok only drops stories support and
+        // falls back to gallery-dl.
+        let disable_label = if def.id == "tiktok" {
+            crate::i18n::t("disable_tiktok_stories").to_string()
+        } else {
+            crate::i18n::t("disable_hide_keep_files").to_string()
+        };
+
+        // Exact labels used for dispatch (avoids fragile starts_with on i18n
+        // text, which broke when the key was missing and showed up verbatim).
+        let enable_label = if let Some(pin) = def.pin {
+            crate::i18n::tf("enable_install_pin", &[("pin", pin)])
+        } else {
+            crate::i18n::t("enable").to_string()
+        };
+        let update_label = if let Some(pin) = def.pin {
+            crate::i18n::tf("update_reinstall_pin", &[("pin", pin)])
+        } else {
+            crate::i18n::t("enable").to_string()
+        };
+        // Label shown in the Disabled state: re-enable without reinstalling,
+        // since the files are already on disk.
+        let reenable_label = crate::i18n::t("enable").to_string();
+
         let mut options: Vec<String> = Vec::new();
         match state {
-            PluginState::NotInstalled => options.push(crate::i18n::tf(
-                "enable_install_pin",
-                &[("pin", THREADSTRACTOR_PIN)],
-            )),
+            PluginState::NotInstalled => {
+                options.push(enable_label.clone());
+            }
             PluginState::Disabled => {
                 options.push(crate::i18n::t("enable").to_string());
                 options.push(crate::i18n::t("remove_deletes_all_files").to_string());
             }
             PluginState::Enabled(_) => {
-                options.push(crate::i18n::tf(
-                    "update_reinstall_pin",
-                    &[("pin", THREADSTRACTOR_PIN)],
-                ));
-                options.push(crate::i18n::t("disable_hide_keep_files").to_string());
+                if def.pin.is_some() {
+                    options.push(update_label.clone());
+                }
+                options.push(disable_label.clone());
                 options.push(crate::i18n::t("remove_deletes_all_files").to_string());
             }
         }
@@ -79,9 +102,7 @@ fn plugin_submenu(def: &PluginDef) {
         };
         match choice.as_str() {
             s if s == crate::i18n::t("back") => return,
-            c if c.starts_with(&crate::i18n::t("enable"))
-                || c.starts_with(&crate::i18n::t("update_reinstall_pin")) =>
-            {
+            c if c == enable_label || c == update_label => {
                 let res = match def.id {
                     "threads" => plugins::install(),
                     "tiktok" => plugins::install_tiktok(),
@@ -103,7 +124,27 @@ fn plugin_submenu(def: &PluginDef) {
                 }
                 pause();
             }
-            s if s == crate::i18n::t("disable_hide_keep_files") => {
+            s if s == reenable_label => {
+                let res = match def.id {
+                    "threads" => plugins::set_disabled(false),
+                    "tiktok" => plugins::set_tiktok_disabled(false),
+                    _ => Ok(()),
+                };
+                match res {
+                    Ok(()) => println!(
+                        "{}",
+                        crate::i18n::tf(
+                            "plugin_enabled_by",
+                            &[("title", def.title), ("vendor", def.vendor)]
+                        )
+                    ),
+                    Err(e) => {
+                        eprintln!("{}", crate::i18n::tf("failed_x", &[("e", &e.to_string())]))
+                    }
+                }
+                pause();
+            }
+            s if s == disable_label => {
                 let res = match def.id {
                     "threads" => plugins::set_disabled(true),
                     "tiktok" => plugins::set_tiktok_disabled(true),

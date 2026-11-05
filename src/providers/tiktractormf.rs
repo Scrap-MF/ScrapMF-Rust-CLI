@@ -111,8 +111,33 @@ impl Provider for Tiktractormf {
             args.push(OsString::from(joined));
         }
 
-        // Pass through validated extra args (filters etc.).
+        // Pass through validated extra args, dropping flags the tiktok plugin
+        // does not understand (they come from gallery-dl site configs and
+        // would otherwise abort the run with "No such option").
+        let mut skip_next = false;
         for extra in &req.extra_args {
+            if skip_next {
+                skip_next = false;
+                continue;
+            }
+            if extra == "--restrict-filenames"
+                || extra == "--retries"
+                || extra == "--http-timeout"
+                || extra == "--force-ipv4"
+                || extra == "--proxy"
+                || extra == "--user-agent"
+                || extra == "--sleep"
+                || extra == "--sleep-request"
+                || extra == "--sleep-429"
+                || extra == "--limit-rate"
+                || extra == "--destination"
+                || extra == "--get-urls"
+            {
+                if extra != "--force-ipv4" {
+                    skip_next = true;
+                }
+                continue;
+            }
             args.push(OsString::from(extra));
         }
 

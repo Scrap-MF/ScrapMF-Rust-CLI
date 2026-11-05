@@ -144,6 +144,7 @@ pub(super) fn prompt_cookie_override(sites: &[String]) -> Step<CookiePick> {
 const DEFAULT_COOKIE_CHOICE: &str = "Default (from site config)";
 
 /// Human description of the session a job will use, for the pre-flight preview.
+#[allow(dead_code)]
 pub(super) fn describe_cookie_source(req: &ScrapeRequest) -> String {
     if let Some(file) = req.cookies_file.as_ref() {
         // Show the profile name, not the full path, when the file is one of ours.
@@ -338,6 +339,126 @@ pub(super) fn jobs_for_account(c: &AccountCtx) -> Result<Vec<ScrapeJob>, String>
         return Ok(jobs);
     }
 
+    // TikTok via tiktractormf: split into photos/videos/stories/profile, each
+    // with its own directory, so files land in the scrapmf tree
+    // ({scrapmf_root}/tiktok/{user}/{kind}) instead of the plugin's default
+    // `dl/`. Only when the plugin is enabled; otherwise gallery-dl handles
+    // everything through the site config.
+    if site_name == "tiktok" && crate::plugins::tiktok_enabled() {
+        use crate::cli::interactive::content::ContentKind;
+        let has_photos = kinds.contains(&ContentKind::Photos);
+        let has_videos = kinds.contains(&ContentKind::Videos);
+        let has_stories = kinds.contains(&ContentKind::Stories);
+        let has_profile = kinds.contains(&ContentKind::Profile);
+        if has_photos || has_videos || has_stories || has_profile {
+            // Resolve the per-kind URLs from the tagged list instead of
+            // reusing the primary URL for every job (which caused stories to
+            // scrape the posts endpoint and duplicate work).
+            let posts_url = c
+                .tagged
+                .iter()
+                .find(|(k, _)| matches!(k, ContentKind::Videos | ContentKind::Photos))
+                .map(|(_, u)| u.clone())
+                .unwrap_or_else(|| url.clone());
+            let stories_url = c
+                .tagged
+                .iter()
+                .find(|(k, _)| *k == ContentKind::Stories)
+                .map(|(_, u)| u.clone());
+            let profile_url = c
+                .tagged
+                .iter()
+                .find(|(k, _)| *k == ContentKind::Profile)
+                .map(|(_, u)| u.clone());
+
+            let mut jobs = Vec::new();
+            if has_videos {
+                let dirs = flatten_quick_dirs(
+                    vec![
+                        "{scrapmf_root}".to_string(),
+                        "{category}".to_string(),
+                        "{user}".to_string(),
+                    ],
+                    &username,
+                );
+                let mut req_videos = base_req(Some(dirs), Vec::new(), Vec::new());
+                req_videos.url = posts_url.clone();
+                req_videos.filename_template =
+                    Some("{date:%Y-%m-%d}_{post_id}{num:?_//>02}.{extension}".to_string());
+                req_videos.extra_args.push("--videos-only".to_string());
+                jobs.push((
+                    req_videos,
+                    site_name.clone(),
+                    format!("{username} (videos)"),
+                    "videos".to_string(),
+                ));
+            }
+            if has_photos {
+                let dirs = flatten_quick_dirs(
+                    vec![
+                        "{scrapmf_root}".to_string(),
+                        "{category}".to_string(),
+                        "{user}".to_string(),
+                    ],
+                    &username,
+                );
+                let mut req_photos = base_req(Some(dirs), Vec::new(), Vec::new());
+                req_photos.url = posts_url.clone();
+                req_photos.filename_template =
+                    Some("{date:%Y-%m-%d}_{post_id}{num:?_//>02}.{extension}".to_string());
+                req_photos.extra_args.push("--photos-only".to_string());
+                jobs.push((
+                    req_photos,
+                    site_name.clone(),
+                    format!("{username} (photos)"),
+                    "photos".to_string(),
+                ));
+            }
+            if has_stories && let Some(su) = stories_url.clone() {
+                let dirs = flatten_quick_dirs(
+                    vec![
+                        "{scrapmf_root}".to_string(),
+                        "{category}".to_string(),
+                        "{user}".to_string(),
+                    ],
+                    &username,
+                );
+                let mut req_stories = base_req(Some(dirs), Vec::new(), Vec::new());
+                req_stories.url = su;
+                req_stories.filename_template =
+                    Some("{date:%Y-%m-%d}_{post_id}{num:?_//>02}.{extension}".to_string());
+                req_stories.extra_args.push("--only-stories".to_string());
+                jobs.push((
+                    req_stories,
+                    site_name.clone(),
+                    format!("{username} (stories)"),
+                    "stories".to_string(),
+                ));
+            }
+            if has_profile && let Some(pu) = profile_url.clone() {
+                let dirs = flatten_quick_dirs(
+                    vec![
+                        "{scrapmf_root}".to_string(),
+                        "{category}".to_string(),
+                        "{user}".to_string(),
+                    ],
+                    &username,
+                );
+                let mut req_profile = base_req(Some(dirs), Vec::new(), Vec::new());
+                req_profile.url = pu;
+                req_profile.filename_template = None;
+                req_profile.profile_pic_only = true;
+                jobs.push((
+                    req_profile,
+                    site_name.clone(),
+                    format!("{username} (profile)"),
+                    "profile".to_string(),
+                ));
+            }
+            return Ok(jobs);
+        }
+    }
+
     // Threads: fotos/videos (posts) and profile pic are separate — profile needs --profile-pic-only
     // Always 3 separate jobs so the dashboard shows progress 1-by-1, even for All.
     if site_name == "threads" {
@@ -438,9 +559,6 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
             .unwrap_or_else(|| cfg.general.output_dir.display().to_string());
         summary.push(format!("  {}. {site}:{username} → {kinds_desc}", i + 1));
         summary.push(format!("     → {out}"));
-        // Surface the session each job will actually use, so a wrong cookie
-        // profile is visible here rather than discovered after the download.
-        summary.push(format!("     session: {}", describe_cookie_source(req)));
     }
 
     let proceed = if tty {
@@ -495,10 +613,10 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                     missing.push(msg);
                 }
             } else if site == "tiktok"
-                && crate::plugins::tiktok_enabled()
-                && !crate::providers::Provider::is_available(
-                    &crate::providers::tiktractormf::Tiktractormf,
-                )
+                && (!crate::plugins::tiktok_enabled()
+                    || !crate::providers::Provider::is_available(
+                        &crate::providers::tiktractormf::Tiktractormf,
+                    ))
             {
                 let msg = crate::i18n::t("tiktok_plugin_not_enabled_scrape");
                 if !missing.contains(&msg) {
@@ -587,6 +705,16 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                         let rl = runlog.clone();
                         let paths = downloaded_by_job[i].clone();
                         move |path: &str| {
+                            // Skip plugin noise lines (summary/note) that are not files.
+                            let trimmed = path.trim();
+                            if trimmed.contains("summary —")
+                                || trimmed.contains("note —")
+                                || trimmed.starts_with("posts:")
+                                || trimmed.starts_with("media:")
+                            {
+                                rl.borrow_mut().line(path);
+                                return;
+                            }
                             rl.borrow_mut().line(path);
                             paths
                                 .lock()
@@ -610,6 +738,8 @@ pub(super) fn preview_and_execute(requests: Vec<ScrapeJob>, cfg: &config::Config
                                 || line.contains("threadstractor @")
                                 || line.contains("rate_limit=")
                                 || line.trim() == "posts"
+                                || line.contains("summary —")
+                                || line.contains("note —")
                             {
                                 return;
                             }
@@ -1221,9 +1351,13 @@ pub(super) fn site_options_with_fallbacks(fallbacks: &[&str]) -> Vec<String> {
         }
     }
     // Plugin gating: sites backed by an optional provider only appear when
-    // the plugin is installed and enabled (threads → threadstractormf).
+    // the plugin is installed and enabled (threads → threadstractormf,
+    // tiktok → tiktractormf).
     if !crate::plugins::threads_enabled() {
         opts.retain(|s| s != "threads");
+    }
+    if !crate::plugins::tiktok_enabled() {
+        opts.retain(|s| s != "tiktok");
     }
     opts.sort();
     opts
@@ -1267,8 +1401,11 @@ pub(super) fn prompt_quick_scrape() {
     let cfg = config::load().unwrap_or_default();
 
     // Site selection from sites/*.toml (+ fallbacks)
-    let site_opts =
-        site_options_with_fallbacks(&["instagram", "tiktok", "twitter", "vsco", "facebook"]);
+    let mut fallbacks = vec!["instagram", "twitter", "vsco", "facebook"];
+    if crate::plugins::tiktok_enabled() {
+        fallbacks.insert(1, "tiktok");
+    }
+    let site_opts = site_options_with_fallbacks(&fallbacks);
 
     // Decorated Browser with fixed chrome `╭ SCRAPMF v1.7.0 ─ Download content ─╮`
     // Rebuilt whenever the flow returns to this question.
@@ -1278,9 +1415,17 @@ pub(super) fn prompt_quick_scrape() {
             .map(|k| {
                 let spec = crate::sites::registry::find_by_id(k);
                 let details = if let Some(s) = spec {
+                    // TikTok's backend is the tiktractormf plugin when it is
+                    // enabled, falling back to gallery-dl otherwise — reflect the
+                    // effective backend instead of the static registry value.
+                    let backend = if s.id == "tiktok" && crate::plugins::tiktok_enabled() {
+                        "Tiktractormf (plugin)".to_string()
+                    } else {
+                        format!("{:?}", s.backend)
+                    };
                     vec![
                         format!("pattern: {}", s.patterns.join(", ")),
-                        format!("backend: {:?}", s.backend),
+                        format!("backend: {backend}"),
                         format!("kinds: {}", s.content_kinds.join(", ")),
                     ]
                 } else {

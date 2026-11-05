@@ -1,19 +1,36 @@
 ```console
 $ scrapmf --help
-Safe, interactive archiver for social media galleries
+╭─ scrapmf 1.3.0 ─╮
+│ scrapmf orchestrates gallery-dl (and optional plugins) to archive social media galleries.
+Run without a subcommand to open the interactive TUI. │
+╰───────────────────╯
 
 Usage: scrapmf [OPTIONS] [COMMAND]
 
 Commands:
-  scrape  Scrape a URL using the configured backend
-  config  Manage configuration
-  doctor  Check backends and system
-  help    Print this message or the help of the given subcommand(s)
+  scrape    Scrape a URL using the configured backend
+  config    Manage configuration
+  doctor    Check backends and system
+  sites     List available sites and their backends
+  profiles  Manage cookie profiles
+  plugins   Manage plugins (threads, tiktok, termux-scan)
+  help      Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose...  Increase verbosity (-v, -vv)
-  -h, --help        Print help
-  -V, --version     Print version
+  -v, --verbose...
+          Increase verbosity (-v, -vv)
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+
+Examples:
+  scrapmf scrape https://www.instagram.com/user/ --dry-run
+  scrapmf scrape https://www.tiktok.com/@user -o ~/scrapmf --cookies-from-browser brave
+  scrapmf doctor
+  scrapmf plugins list
 
 ```
 

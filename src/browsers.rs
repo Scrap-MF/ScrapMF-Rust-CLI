@@ -309,7 +309,40 @@ pub fn roots_for(ch: &BrowserChannel, chome: &Path, home: Option<&Path>) -> Vec<
 
 /// Candidate profile roots for a channel, resolved from the environment.
 pub fn profile_roots(ch: &BrowserChannel) -> Vec<Root> {
-    roots_for(ch, &config_home(), home().as_deref())
+    #[cfg(windows)]
+    {
+        let mut out = Vec::new();
+        if let Some(data) = dirs::data_dir() {
+            for rel in windows_rel_dirs(ch) {
+                out.push((data.join(rel), "native"));
+            }
+        }
+        // Still include the (Linux-style) roots for WSL/compatibility.
+        out.extend(roots_for(ch, &config_home(), home().as_deref()));
+        out
+    }
+    #[cfg(not(windows))]
+    {
+        roots_for(ch, &config_home(), home().as_deref())
+    }
+}
+
+#[cfg(windows)]
+fn windows_rel_dirs(ch: &BrowserChannel) -> &'static [&'static str] {
+    match ch.id {
+        "brave" => &["BraveSoftware/Brave-Browser/User Data"],
+        "brave-origin" => &["BraveSoftware/Brave-Browser/User Data"],
+        "brave-beta" => &["BraveSoftware/Brave-Browser-Beta/User Data"],
+        "brave-nightly" => &["BraveSoftware/Brave-Browser-Nightly/User Data"],
+        "brave-origin-beta" => &["BraveSoftware/Brave-Browser-Beta/User Data"],
+        "brave-origin-nightly" => &["BraveSoftware/Brave-Browser-Nightly/User Data"],
+        "chrome" => &["Google/Chrome/User Data"],
+        "chromium" => &["Chromium/User Data"],
+        "edge" => &["Microsoft/Edge/User Data"],
+        "vivaldi" => &["Vivaldi/User Data"],
+        "opera" => &["Opera Software/Opera Stable"],
+        _ => &[],
+    }
 }
 
 /// KWallet client binaries, newest generation first.
@@ -433,7 +466,32 @@ pub fn available_channels(filename: &str) -> Vec<(&'static BrowserChannel, Cooki
 
 /// Whether an executable for a channel is on `$PATH`.
 pub fn binary_for(ch: &BrowserChannel) -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        for name in windows_bin_candidates(ch) {
+            if let Ok(p) = which::which(name) {
+                return Some(p);
+            }
+        }
+    }
     ch.bins.iter().find_map(|b| which::which(b).ok())
+}
+
+#[cfg(windows)]
+fn windows_bin_candidates(ch: &BrowserChannel) -> &'static [&'static str] {
+    match ch.id {
+        "brave" | "brave-origin" => &["brave.exe", "brave-browser.exe"],
+        "brave-beta" | "brave-origin-beta" => &["brave-beta.exe", "brave-browser-beta.exe"],
+        "brave-nightly" | "brave-origin-nightly" => {
+            &["brave-nightly.exe", "brave-browser-nightly.exe"]
+        }
+        "chrome" | "chromium" => &["chrome.exe", "chromium.exe"],
+        "edge" => &["msedge.exe", "microsoft-edge.exe"],
+        "vivaldi" => &["vivaldi.exe"],
+        "opera" => &["opera.exe"],
+        "firefox" => &["firefox.exe"],
+        _ => &[],
+    }
 }
 
 #[cfg(test)]

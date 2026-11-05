@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 ///    https://codeberg.org/mikf/gallery-dl/releases/tag/v{PIN}
 /// 2. Update this constant, run the full test suite.
 /// 3. Cut a new scrapmf release — users get the new pin via `scrapmf setup`.
-pub const GALLERY_DL_PIN: &str = "1.33.0-dev";
+pub const GALLERY_DL_PIN: &str = "1.32.19";
 
 /// Pinned yt-dlp version managed by scrapmf (used by gallery-dl's ytdl
 /// fallback). Standalone builds published by upstream on GitHub.
@@ -269,19 +269,24 @@ pub fn resolve(config_override: Option<PathBuf>) -> Source {
 /// an error or a doctor line, and spawning the binary twice for one answer is
 /// waste.
 pub fn installed_version() -> Option<String> {
-    static CACHE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-    CACHE
-        .get_or_init(|| {
-            let exe = gallery_dl_executable().ok()?;
-            let out = crate::process::Executor::run_capturing(
-                &exe.to_string_lossy(),
-                &[std::ffi::OsString::from("--version")],
-            )
-            .ok()?;
-            let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            (!v.is_empty()).then_some(v)
-        })
-        .clone()
+    static CACHE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+    if let Ok(guard) = CACHE.lock()
+        && let Some(v) = guard.as_ref()
+    {
+        return Some(v.clone());
+    }
+    let exe = gallery_dl_executable().ok()?;
+    let out = crate::process::Executor::run_capturing(
+        &exe.to_string_lossy(),
+        &[std::ffi::OsString::from("--version")],
+    )
+    .ok()?;
+    let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let v = (!v.is_empty()).then_some(v)?;
+    if let Ok(mut guard) = CACHE.lock() {
+        *guard = Some(v.clone());
+    }
+    Some(v)
 }
 
 /// Warn when the installed gallery-dl is not the pinned build.
