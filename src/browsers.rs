@@ -312,7 +312,16 @@ pub fn profile_roots(ch: &BrowserChannel) -> Vec<Root> {
     #[cfg(windows)]
     {
         let mut out = Vec::new();
-        if let Some(data) = dirs::data_dir() {
+        // Chromium-family browsers keep their profile in %LOCALAPPDATA%,
+        // while Firefox keeps it in %APPDATA% (Roaming). Using data_dir() for
+        // every channel pointed every Chromium lookup at the wrong place and
+        // made `doctor` report no cookie databases on a stock Windows install.
+        let data = if ch.id == "firefox" {
+            dirs::data_dir()
+        } else {
+            dirs::data_local_dir()
+        };
+        if let Some(data) = data {
             for rel in windows_rel_dirs(ch) {
                 out.push((data.join(rel), "native"));
             }
