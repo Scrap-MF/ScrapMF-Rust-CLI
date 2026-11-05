@@ -401,11 +401,23 @@ fn newest_cookie_db(root: &Path, filename: &str) -> Option<(PathBuf, String)> {
                 && md.len() > 0
             {
                 let mtime = md.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-                let profile = p
-                    .parent()
-                    .and_then(|d| d.file_name())
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
+                // Chromium recently moved its cookie database under a `Network`
+                // subdirectory (`.../Default/Network/Cookies`). The profile is
+                // still `Default`, not `Network`, and gallery-dl expects the
+                // profile directory rather than the `Network` folder.
+                let profile = (|| {
+                    let parent = p.parent()?;
+                    let name = parent.file_name()?.to_string_lossy().into_owned();
+                    if name == "Network" {
+                        parent
+                            .parent()
+                            .and_then(|d| d.file_name())
+                            .map(|n| n.to_string_lossy().into_owned())
+                    } else {
+                        Some(name)
+                    }
+                })()
+                .unwrap_or_default();
                 if best.as_ref().is_none_or(|(_, _, t)| mtime > *t) {
                     best = Some((p, profile, mtime));
                 }

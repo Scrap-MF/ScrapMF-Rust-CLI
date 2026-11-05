@@ -1000,8 +1000,18 @@ fn gallery_dl_cookie_spec_uncached(browser: &str) -> Option<String> {
     // The database's parent is the profile directory (or the channel root for
     // Opera, which keeps its database at the root). gallery-dl accepts either:
     // it looks for the database directly under the path it is given.
+    // Chromium recently stores the database under a `Network` subdirectory, so
+    // step up one level there; otherwise gallery-dl cannot find `Local State`.
     Some(
-        match db.and_then(|db| db.path.parent().map(|p| p.display().to_string())) {
+        match db.and_then(|db| {
+            let parent = db.path.parent()?;
+            let profile_dir = if parent.file_name().map(|n| n == "Network").unwrap_or(false) {
+                parent.parent()?
+            } else {
+                parent
+            };
+            Some(profile_dir.display().to_string())
+        }) {
             Some(dir) => format!("{name}:{dir}"),
             // Nothing found on disk: let gallery-dl use its own roots. The family
             // name alone still beats a channel id it rejects.
