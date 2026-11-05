@@ -59,16 +59,11 @@ fn ensure_app_config() {
 fn enable_windows_utf8_console() {
     // The classic Windows console defaults to a legacy code page (e.g. 437/1252)
     // and cannot render the box-drawing characters and emojis used by the TUI.
-    // Switching to UTF-8 keeps the output readable without requiring Windows
-    // Terminal, which not every user has.
-    unsafe extern "system" {
-        fn SetConsoleOutputCP(code_page: u32) -> i32;
-        fn SetConsoleCP(code_page: u32) -> i32;
-    }
-    unsafe {
-        let _ = SetConsoleOutputCP(65001);
-        let _ = SetConsoleCP(65001);
-    }
+    // `unsafe_code` is forbidden in this crate, so go through `cmd` instead
+    // of calling the Win32 API directly; `chcp` updates the active console.
+    let _ = std::process::Command::new("cmd")
+        .args(["/C", "chcp", "65001"])
+        .status();
 }
 
 fn main() -> Result<()> {
