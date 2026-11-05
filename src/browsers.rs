@@ -473,8 +473,48 @@ pub fn binary_for(ch: &BrowserChannel) -> Option<PathBuf> {
                 return Some(p);
             }
         }
+        // Many Windows browsers are installed under well-known locations but
+        // are not on PATH (Brave, Chrome, Edge, ...). Probe those before
+        // giving up so cookie capture keeps working on a stock Windows install.
+        for dir in windows_install_dirs(ch) {
+            for name in windows_bin_candidates(ch) {
+                let p = dir.join(name);
+                if p.is_file() {
+                    return Some(p);
+                }
+            }
+        }
     }
     ch.bins.iter().find_map(|b| which::which(b).ok())
+}
+
+#[cfg(windows)]
+fn windows_install_dirs(ch: &BrowserChannel) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    let envs = ["PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"];
+    for env in envs {
+        let Ok(base) = std::env::var(env) else {
+            continue;
+        };
+        let base = PathBuf::from(base);
+        let candidates: &[&str] = match ch.id {
+            "brave" | "brave-origin" => &["BraveSoftware/Brave-Browser/Application"],
+            "brave-beta" | "brave-origin-beta" => &["BraveSoftware/Brave-Browser-Beta/Application"],
+            "brave-nightly" | "brave-origin-nightly" => {
+                &["BraveSoftware/Brave-Browser-Nightly/Application"]
+            }
+            "chrome" | "chromium" => &["Google/Chrome/Application", "Chromium/Application"],
+            "edge" => &["Microsoft/Edge/Application"],
+            "vivaldi" => &["Vivaldi/Application"],
+            "opera" => &["Opera", "Programs/Opera", "Programs/Opera GX"],
+            "firefox" => &["Mozilla Firefox"],
+            _ => &[],
+        };
+        for rel in candidates {
+            dirs.push(base.join(rel));
+        }
+    }
+    dirs
 }
 
 #[cfg(windows)]

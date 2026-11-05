@@ -180,7 +180,7 @@ fn browser_cookies_menu(current: Option<&str>) {
     let detected = crate::providers::browser::detect_available_browsers();
     // Usable channels first; the rest stay listed but flagged, so a browser
     // that is installed in an unusual way is still selectable.
-    let (ready, missing): (Vec<_>, Vec<_>) = detected.iter().partition(|b| b.available);
+    let ready: Vec<_> = detected.iter().filter(|b| b.available).collect();
 
     let none_label = crate::i18n::t("none_no_browser_cookies");
     let mut opts: Vec<(String, Vec<String>)> = Vec::new();
@@ -214,16 +214,6 @@ fn browser_cookies_menu(current: Option<&str>) {
             detail.push(crate::i18n::t("currently_selected_arrow"));
         }
         opts.push((b.display.clone(), detail));
-        ids.push(Some(b.id.to_string()));
-    }
-    for b in &missing {
-        opts.push((
-            crate::i18n::tf("not_usable_paren", &[("display", &b.display)]),
-            vec![
-                crate::i18n::tf("id_colon", &[("id", b.id)]),
-                crate::i18n::t("browser_binary_or_cookie_db_not_found"),
-            ],
-        ));
         ids.push(Some(b.id.to_string()));
     }
     opts.push((
@@ -478,12 +468,9 @@ fn capture_browser_options() -> Vec<String> {
                 || crate::browsers::find_cookie_db(c, "cookies.sqlite").is_some()
         })
         .collect();
-    if present.is_empty() {
-        return crate::browsers::CHANNELS
-            .iter()
-            .map(|c| c.display.to_string())
-            .collect();
-    }
+    // Only offer browsers that are actually present on this machine; never
+    // fall back to the full channel list, which made every browser look
+    // selectable even when it was not installed.
     present.iter().map(|c| c.display.to_string()).collect()
 }
 
@@ -493,6 +480,10 @@ fn capture_browser_options() -> Vec<String> {
 fn create_profile_wizard() {
     use crate::config::cookies;
     let browsers = capture_browser_options();
+    if browsers.is_empty() {
+        println!("{}", crate::i18n::t("no_browsers_detected"));
+        return;
+    }
     let b_idx = match crate::cli::interactive::menu::pick_single(
         &crate::i18n::t("config_cookie_capture_browser"),
         browsers

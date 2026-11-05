@@ -542,12 +542,28 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
                 // and produced a permanent, unactionable warning. The capture is
                 // still refreshed automatically on the next scrape when needed.
             } else {
+                let (bin_found, db_found) = if let Some(c) = ch {
+                    let bin = crate::browsers::binary_for(c).is_some();
+                    let db_name = if c.id == "firefox" {
+                        "cookies.sqlite"
+                    } else {
+                        "Cookies"
+                    };
+                    let db = crate::browsers::find_cookie_db(c, db_name).is_some();
+                    (bin, db)
+                } else {
+                    (false, false)
+                };
+                let key = if !bin_found && !db_found {
+                    "doctor_browser_cookies_unusable"
+                } else if !bin_found {
+                    "doctor_browser_cookies_no_binary"
+                } else {
+                    "doctor_browser_cookies_no_db"
+                };
                 out.push(CheckLine {
                     level: Level::Error,
-                    text: crate::i18n::tf(
-                        "doctor_browser_cookies_unusable",
-                        &[("label", &label), ("id", id)],
-                    ),
+                    text: crate::i18n::tf(key, &[("label", &label), ("id", id)]),
                 });
                 ok = false;
             }
