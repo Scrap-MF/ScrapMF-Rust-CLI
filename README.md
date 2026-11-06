@@ -287,3 +287,13 @@ contributors. Not affiliated.
 ---
 
 Created by **mfapplications** ([@sbtn_mf](https://www.instagram.com/sbtn_mf)).
+
+---
+
+## Support
+
+If you find scrapmf useful, you can support its development:
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/mfapplications)
+
+- Ko-fi: https://ko-fi.com/mfapplications
