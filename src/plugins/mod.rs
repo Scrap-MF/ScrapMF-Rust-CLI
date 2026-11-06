@@ -32,10 +32,10 @@ use std::path::{Path, PathBuf};
 pub const THREADSTRACTOR_PIN: &str = "1.4.0";
 
 /// Exact upstream release of the tiktok plugin scrapmf installs.
-pub const TIKSTRACTOR_PIN: &str = "1.4.0";
+pub const TIKSTRACTOR_PIN: &str = "1.5.0";
 
 /// Public PyPI spec used by `pip install` during Enable (tiktok).
-pub const TIKSTRACTOR_SPEC: &str = "tikstractormf[browser,antibot]==1.4.0";
+pub const TIKSTRACTOR_SPEC: &str = "tikstractormf[browser,antibot]==1.5.0";
 
 // ─── Plugin registry ────────────────────────────────────────────────────────
 
