@@ -1212,7 +1212,55 @@ fn run_one_sub_scrape_impl(
         }
     }
 
-    run_res?;
+    if let Err(e) = run_res {
+        let msg = e.to_string();
+        // gallery-dl on Windows cannot always decrypt Chromium cookies via
+        // DPAPI (especially after Chrome 127's app-bound encryption). It then
+        // crashes with "'NoneType' object has no attribute 'decode'". Try an
+        // auto-captured cookie profile first so the user does not have to close
+        // the browser; otherwise surface an actionable hint.
+        if (msg.contains("Failed to decrypt cookie (DPAPI)")
+            || msg.contains("'NoneType' object has no attribute 'decode'"))
+            && req.cookies_from_browser.is_some()
+            && req.cookies_file.is_none()
+        {
+            let browser = req
+                .cookies_from_browser
+                .as_deref()
+                .unwrap_or_default()
+                .split(':')
+                .next()
+                .unwrap_or_default();
+            let auto_name = crate::config::cookies::auto_profile_name(browser);
+            if let Some(path) = crate::config::cookies::profile_path(&auto_name)
+                && path.exists()
+            {
+                if let Some(hooks) = hooks.as_deref_mut() {
+                    let hf = &mut hooks.on_log;
+                    hf(&format!(
+                        "[scrapmf] browser cookies could not be decrypted; retrying with captured profile '{auto_name}'"
+                    ));
+                }
+                let mut retry_req = req.clone();
+                retry_req.cookies_file = Some(path);
+                retry_req.cookies_from_browser = None;
+                return run_one_sub_scrape_impl(
+                    &retry_req,
+                    url,
+                    dry_run,
+                    hooks,
+                    abort,
+                    backend_override,
+                );
+            }
+            return Err(anyhow::anyhow!(
+                "{msg}\n  help: gallery-dl could not decrypt this browser's cookies on Windows.\n  \
+                 create a cookie profile in scrapmf (Configuration -> Cookie profiles),\n  \
+                 use Firefox, or export cookies to a Netscape cookies.txt and pass --cookies <file>"
+            ));
+        }
+        return Err(e);
+    }
     Ok(challenge_failures.load(std::sync::atomic::Ordering::Relaxed))
 }
 
