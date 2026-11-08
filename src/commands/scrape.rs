@@ -330,7 +330,27 @@ fn run_scrape(
         }
         result
     } else {
-        crate::application::scraper::scrape(req, dry_run)
+        // Non-interactive path: still collect reported paths so the post-run
+        // integrity check and MediaScan narrowing have something to work on.
+        // stdout/stderr are mirrored to the console to preserve the
+        // inherited-output UX the old `scrape()` path provided.
+        let never = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let downloaded2 = downloaded.clone();
+        let mut hooks = crate::application::scraper::ScrapeHooks {
+            on_steps_plan: None,
+            on_step: None,
+            on_file: Box::new(move |path: &str| {
+                println!("{path}");
+                downloaded2
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .push(path.to_string());
+            }),
+            on_log: Box::new(|line: &str| {
+                eprintln!("{line}");
+            }),
+        };
+        crate::application::scraper::scrape_with_hooks(req, dry_run, Some(&mut hooks), &never)
     }
 }
 

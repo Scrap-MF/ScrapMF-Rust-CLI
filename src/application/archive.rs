@@ -177,6 +177,7 @@ pub fn append_entries(
 pub fn seed_cache(path: &Path, keys: &HashSet<String>) -> anyhow::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
+        crate::config::restrict_perms(dir, true);
     }
     // Start fresh: the JSONL is the source of truth, the cache is disposable.
     let _ = std::fs::remove_file(path);
