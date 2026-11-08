@@ -28,12 +28,9 @@ name = "scrapmf"
 # Published to crates.io so users can `cargo install scrapmf`.
 # Requires the CARGO_REGISTRY_TOKEN secret in the release-plz workflow.
 publish = true
-# git-only mode: determine the current version from GIT TAGS instead of the
-# cargo registry. scrapmf was never published to crates.io, so without this
-# release-plz could not establish a baseline and silently computed
-# "next version 1.0.0 / already up-to-date" no matter how many feat/fix
-# commits landed. With git_only it reads tag `v1.0.0` and bumps correctly.
-git_only = true
+# Now published to crates.io: use the registry as the version baseline instead
+# of git tags. (git_only and publish are mutually exclusive.)
+git_only = false
 # Stop cargo-semver-checks from forcing major bumps on internal changes.
 #
 # release-plz defaults to running the API check whenever the package looks
