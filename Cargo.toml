@@ -1,12 +1,14 @@
 [package]
 name = "scrapmf"
-version = "1.5.4"
+version = "1.5.5"
 edition = "2024"
 rust-version = "1.88"
 description = "Safe, interactive archiver for social media galleries"
 readme = "README.md"
 license = "GPL-3.0-only"
 repository = "https://github.com/Scrap-MF/ScrapMF-Rust-CLI"
+homepage = "https://Scrap-MF.github.io/ScrapMF-Docs/"
+documentation = "https://Scrap-MF.github.io/ScrapMF-Docs/"
 keywords = ["cli", "gallery-dl", "scraping", "orchestrator"]
 categories = ["command-line-utilities"]
 authors = ["Scrap-MF"]

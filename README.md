@@ -28,6 +28,8 @@ don't have to learn its flags.
 
 ## Install
 
+Full documentation: https://Scrap-MF.github.io/ScrapMF-Docs/
+
 Every method puts `scrapmf` in your `$PATH`.
 
 **Linux / macOS (one-liner):**
