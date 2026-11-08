@@ -285,14 +285,33 @@ pub struct ScrapeHooks<'a> {
 /// gallery-dl does, and two copies of this rule would eventually disagree
 /// about where a file belongs.
 pub fn scrapmf_root(req: &ScrapeRequest) -> String {
-    req.profile_name
+    // Sanitize so the value is safe both as a gallery-dl keyword (no spaces,
+    // quotes, '=' or control chars that would break `-o key=value` parsing)
+    // and as a single path segment in directory templates.
+    let raw = req
+        .profile_name
         .as_deref()
         .filter(|s| !s.is_empty())
         .map(String::from)
         .or_else(|| {
             crate::application::archive::site_account_from_url(&req.url).map(|(_, account)| account)
         })
-        .unwrap_or_else(|| "default".to_string())
+        .unwrap_or_else(|| "default".to_string());
+    let cleaned: String = raw
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if cleaned.is_empty() || cleaned == "." || cleaned == ".." {
+        "default".to_string()
+    } else {
+        cleaned
+    }
 }
 
 /// Short process name for a sub-extractor URL — dashboard progress label.
@@ -1106,12 +1125,6 @@ fn run_one_sub_scrape_impl(
         let a = p.build_args(&sub_req)?;
         (bin, a)
     };
-    if dry_run {
-        args.push(std::ffi::OsString::from("--get-urls"));
-        crate::process::Executor::run_inherited_checked(&binary, &args)?;
-        return Ok(0);
-    }
-
     // Count posts lost to anti-bot JS challenges (rehydration exhausted).
     if dry_run {
         args.push(std::ffi::OsString::from("--get-urls"));

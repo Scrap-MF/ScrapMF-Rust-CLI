@@ -25,7 +25,9 @@ pr_branch_prefix = "release-plz-"
 
 [[package]]
 name = "scrapmf"
-publish = false
+# Published to crates.io so users can `cargo install scrapmf`.
+# Requires the CARGO_REGISTRY_TOKEN secret in the release-plz workflow.
+publish = true
 # git-only mode: determine the current version from GIT TAGS instead of the
 # cargo registry. scrapmf was never published to crates.io, so without this
 # release-plz could not establish a baseline and silently computed

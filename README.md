@@ -40,10 +40,18 @@ Downloads the latest build for your architecture, verifies its checksum, and
 installs to `~/.local/bin`. Pass a version tag (`install.sh v1.0.0`), an install
 directory (2nd argument), or `--gnu` for the dynamically-linked build.
 
-**With Cargo** (needs Rust 1.88+):
+**With Cargo** (needs Rust 1.88+ and a C compiler for the bundled SQLite):
 
 ```bash
+# Debian/Ubuntu: sudo apt install build-essential
+# Fedora:        sudo dnf install gcc
+# macOS:         xcode-select --install
+```
+
+```bash
+cargo install scrapmf                  # from crates.io (builds from source)
 cargo binstall scrapmf                 # prebuilt binary
+cargo install --git https://github.com/Scrap-MF/ScrapMF-Rust-CLI  # latest main
 cargo install --path .                 # or build from this repo
 ```
 

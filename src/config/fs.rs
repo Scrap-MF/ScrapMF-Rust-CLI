@@ -15,14 +15,24 @@ pub(super) fn write_atomic(path: &Path, content: &str) -> anyhow::Result<()> {
         std::process::id(),
         unique
     ));
-    std::fs::write(&tmp, content).with_context(|| format!("write {}", tmp.display()))?;
+    if let Err(e) = std::fs::write(&tmp, content) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e).with_context(|| format!("write {}", tmp.display()));
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
     }
-    std::fs::rename(&tmp, path)
-        .with_context(|| format!("atomic rename {} -> {}", tmp.display(), path.display()))?;
+    // Best-effort fsync to reduce the chance of a half-written file on crash.
+    if let Ok(f) = std::fs::OpenOptions::new().write(true).open(&tmp) {
+        let _ = f.sync_all();
+    }
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e)
+            .with_context(|| format!("atomic rename {} -> {}", tmp.display(), path.display()));
+    }
     Ok(())
 }
 

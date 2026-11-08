@@ -236,17 +236,25 @@ pub fn resolve_preset(url: &str, preset_name: Option<&str>, config: &Config) -> 
     if let Some(name) = preset_name {
         return config.presets.get(name).cloned();
     }
-    // Auto-match by pattern contains
-    config
+    // Auto-match by pattern contains. Sort by pattern length (longest first)
+    // so the most specific preset wins, and tie-break by key for determinism
+    // (HashMap iteration order is not stable across runs).
+    let mut candidates: Vec<(&String, &Preset)> = config
         .presets
-        .values()
-        .find(|preset| {
+        .iter()
+        .filter(|(_, preset)| {
             preset
                 .pattern
                 .as_ref()
                 .is_some_and(|pat| url.contains(pat.as_str()))
         })
-        .cloned()
+        .collect();
+    candidates.sort_by(|(ka, pa), (kb, pb)| {
+        let la = pa.pattern.as_ref().map(|p| p.len()).unwrap_or(0);
+        let lb = pb.pattern.as_ref().map(|p| p.len()).unwrap_or(0);
+        lb.cmp(&la).then_with(|| ka.cmp(kb))
+    });
+    candidates.first().map(|(_, p)| (*p).clone())
 }
 
 /// Save config to XDG path with 0o600.
@@ -359,16 +367,11 @@ pub fn ensure_default_config() -> anyhow::Result<()> {
                     || s.contains("output_dir = \"~\"")
                         && !s.contains("output_dir = \"~/scrapmf\""))
             {
-                let new_cfg = Config {
-                    general: General {
-                        output_dir: std::path::PathBuf::from("~/scrapmf"),
-                        archive: cfg.general.archive,
-                        cookies_from_browser: cfg.general.cookies_from_browser.clone(),
-                        language: cfg.general.language.clone(),
-                    },
-                    backend: cfg.backend.clone(),
-                    ..Default::default()
-                };
+                // Preserve everything except the offending output_dir: only
+                // `general.output_dir` changes, so presets/profiles/sites that
+                // still live inline are not wiped by the migration.
+                let mut new_cfg = cfg.clone();
+                new_cfg.general.output_dir = std::path::PathBuf::from("~/scrapmf");
                 if let Ok(body) = toml::to_string_pretty(&new_cfg) {
                     let header = r#"# scrapmf — main config
 # XDG: ~/.config/scrapmf/config.toml (0o600, dir 0o700)

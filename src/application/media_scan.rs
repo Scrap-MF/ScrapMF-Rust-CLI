@@ -226,11 +226,24 @@ pub fn maybe_scan(dir: &Path, downloaded: Option<&[String]>) -> ScanOutcome {
 /// `-r` is not optional: MediaStore only indexes files sitting directly in the
 /// given path, and every download lands in `<output>/<account>/<kind>/`.
 fn run_scan(bin: &Path, target: &Path) -> ScanOutcome {
-    match std::process::Command::new(bin)
-        .arg("-r")
-        .arg(target)
-        .status()
-    {
+    // Retry transient ETXTBSY (os error 26) that can occur when spawning a
+    // freshly written binary under heavy parallel test execution.
+    const ETXTBSY: i32 = 26;
+    let mut attempts = 0;
+    let status = loop {
+        match std::process::Command::new(bin)
+            .arg("-r")
+            .arg(target)
+            .status()
+        {
+            Err(e) if e.raw_os_error() == Some(ETXTBSY) && attempts < 50 => {
+                attempts += 1;
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            other => break other,
+        }
+    };
+    match status {
         Ok(s) if s.success() => {
             tracing::info!(dir=%target.display(), "termux media scan done");
             crate::output::print_info(&crate::i18n::t("media_scan_done"));

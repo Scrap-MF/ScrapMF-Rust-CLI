@@ -91,6 +91,7 @@ impl Executor {
         let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
         if let Ok(guard) = cache.lock()
             && let Some(cached) = guard.get(name)
+            && cached.as_ref().is_none_or(|p| p.exists())
         {
             return cached.clone();
         }

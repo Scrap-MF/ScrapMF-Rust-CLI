@@ -210,6 +210,7 @@ jobs:
               cp "target/${{ matrix.target }}/release/scrapmf.exe" dist/scrapmf.exe
               powershell -NoProfile -Command \
                 "Compress-Archive -Path dist/scrapmf.exe -DestinationPath dist/scrapmf-windows-x86_64.zip -Force"
+              tar czf "dist/scrapmf-${{ matrix.target }}.tar.gz" -C "target/${{ matrix.target }}/release" scrapmf.exe
               tar czf dist/scrapmf-windows-x86_64.tar.gz -C "target/${{ matrix.target }}/release" scrapmf.exe
               ;;
             *)

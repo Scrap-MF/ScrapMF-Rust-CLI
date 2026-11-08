@@ -323,6 +323,7 @@ fn install_managed_venv(yes: bool) -> Result<()> {
     }
 
     std::fs::create_dir_all(&venv).with_context(|| format!("create {}", venv.display()))?;
+    crate::config::restrict_perms(&venv, true);
 
     println!(
         "{}",
@@ -389,6 +390,7 @@ fn install_yt_dlp_managed(yes: bool) -> Result<()> {
     use crate::application::backend;
     let dir = backend::managed_dir().context("cannot determine data directory")?;
     std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
+    crate::config::restrict_perms(&dir, true);
     let asset = backend::yt_dlp_asset();
     let target = dir.join(asset);
     if target.is_file() {
@@ -415,6 +417,7 @@ fn install_yt_dlp_managed(yes: bool) -> Result<()> {
     }
     let work = dir.join(format!(".setup-ytdlp-{}", std::process::id()));
     std::fs::create_dir_all(&work)?;
+    crate::config::restrict_perms(&work, true);
     let asset_path = work.join(asset);
     fetch(&asset_path, &url)?;
     make_executable(&asset_path)?;
@@ -484,19 +487,6 @@ fn fetch(dest: &Path, url: &str) -> Result<()> {
             .arg(url)
             .status()
             .context("launch wget")?
-    } else if cfg!(windows) && command_exists("powershell") {
-        std::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                &format!(
-                    "Invoke-WebRequest -Uri '{}' -OutFile '{}'",
-                    url,
-                    dest.display()
-                ),
-            ])
-            .status()
-            .context("launch powershell")?
     } else {
         anyhow::bail!("{}", crate::i18n::t("setup_curl_wget_required"));
     };

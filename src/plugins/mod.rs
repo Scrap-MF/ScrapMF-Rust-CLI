@@ -355,6 +355,7 @@ pub fn install() -> anyhow::Result<()> {
     let venv =
         threads_venv().ok_or_else(|| anyhow::anyhow!("cannot determine scrapmf data dir"))?;
     std::fs::create_dir_all(&venv)?;
+    crate::config::restrict_perms(&venv, true);
     output::print_info(&crate::i18n::tf(
         "plugins_creating_venv",
         &[("path", &venv.display().to_string())],
@@ -397,6 +398,7 @@ pub fn install() -> anyhow::Result<()> {
     if let (Some(src), Some(dst)) = (venv_binary(), managed_binary_path()) {
         if let Some(parent) = dst.parent() {
             std::fs::create_dir_all(parent)?;
+            crate::config::restrict_perms(parent, true);
         }
         let _ = std::fs::remove_file(&dst);
         #[cfg(unix)]
@@ -427,6 +429,7 @@ pub fn install_tiktok() -> anyhow::Result<()> {
     use crate::output;
     let venv = tiktok_venv().ok_or_else(|| anyhow::anyhow!("cannot determine scrapmf data dir"))?;
     std::fs::create_dir_all(&venv)?;
+    crate::config::restrict_perms(&venv, true);
     output::print_info(&crate::i18n::tf(
         "plugins_creating_venv",
         &[("path", &venv.display().to_string())],
@@ -469,6 +472,7 @@ pub fn install_tiktok() -> anyhow::Result<()> {
     if let (Some(src), Some(dst)) = (tiktok_venv_binary(), tiktok_binary_path()) {
         if let Some(parent) = dst.parent() {
             std::fs::create_dir_all(parent)?;
+            crate::config::restrict_perms(parent, true);
         }
         let _ = std::fs::remove_file(&dst);
         #[cfg(unix)]
