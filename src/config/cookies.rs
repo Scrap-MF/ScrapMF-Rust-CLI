@@ -1078,6 +1078,50 @@ fn chromium_time_to_unix(expires_utc_micros: i64) -> i64 {
 
 /// Extract cookies for `domains` from a Chromium-family browser and save them
 /// as a new profile. Returns (path, count).
+/// Locate the browser's `Local State` file from a cookie DB path.
+#[cfg(windows)]
+fn local_state_path(cookies_db: &std::path::Path) -> Option<std::path::PathBuf> {
+    for anc in cookies_db.ancestors() {
+        if anc.file_name().and_then(|n| n.to_str()) == Some("User Data") {
+            return Some(anc.join("Local State"));
+        }
+    }
+    None
+}
+
+/// Recover the Chromium safe-storage key on Windows via DPAPI (current user).
+#[cfg(windows)]
+fn recover_chromium_key_windows(
+    local_state_path: &std::path::Path,
+) -> Result<chromium_safestorage_core::RecoveredKey, String> {
+    let content = std::fs::read_to_string(local_state_path).map_err(|e| {
+        format!(
+            "cannot read Local State {}: {e}",
+            local_state_path.display()
+        )
+    })?;
+    let json: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("invalid Local State JSON: {e}"))?;
+    let encrypted_key_b64 = json
+        .get("os_crypt")
+        .and_then(|o| o.get("encrypted_key"))
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "no os_crypt.encrypted_key in Local State".to_string())?;
+    let blob = dpapi_core::parse_local_state_encrypted_key(encrypted_key_b64.as_bytes())
+        .map_err(|e| format!("invalid encrypted_key: {e}"))?;
+    let key_bytes =
+        windows_dpapi::decrypt_data(&blob, windows_dpapi::Scope::User, None).map_err(|e| {
+            format!(
+                "DPAPI decryption failed (run as the same user that owns the browser profile): {e}"
+            )
+        })?;
+    let key: [u8; 32] = key_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| format!("DPAPI returned {} bytes, expected 32", key_bytes.len()))?;
+    Ok(chromium_safestorage_core::RecoveredKey::Aes256Gcm(key))
+}
+
 pub fn capture_chromium(
     browser: &str,
     sites: &[String],
@@ -1113,7 +1157,45 @@ pub fn capture_chromium(
         browser,
         std::process::id()
     ));
-    std::fs::copy(&paths.cookies_db, &tmp).map_err(|e| format!("copy cookies db: {e}"))?;
+    // Robust copy: browsers keep the DB (and its -wal/-shm sidecars) open and
+    // locked on Windows, so a plain copy can fail with a sharing violation or
+    // produce an incomplete snapshot. Retry a few times with backoff, and copy
+    // the sidecars too when present.
+    let mut copy_ok = false;
+    for attempt in 0..5 {
+        if std::fs::copy(&paths.cookies_db, &tmp).is_ok() {
+            copy_ok = true;
+            break;
+        }
+        if attempt < 4 {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    }
+    if !copy_ok {
+        return Err(format!(
+            "could not copy cookies database (browser may be running and locking it): {}",
+            paths.cookies_db.display()
+        ));
+    }
+    for suffix in ["-wal", "-shm"] {
+        let side = paths.cookies_db.with_file_name(format!(
+            "{}{}",
+            paths
+                .cookies_db
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy(),
+            suffix
+        ));
+        if side.is_file() {
+            let side_tmp = tmp.with_file_name(format!(
+                "{}{}",
+                tmp.file_name().unwrap_or_default().to_string_lossy(),
+                suffix
+            ));
+            let _ = std::fs::copy(&side, &side_tmp);
+        }
+    }
 
     let result = (|| {
         // encrypted_value read as HEX so it survives the TSV pipe.
@@ -1218,29 +1300,62 @@ pub fn capture_chromium(
             );
         }
 
+        // On Windows the safe-storage key comes from DPAPI + Local State and
+        // cookies are AES-256-GCM. Resolve it once here; a failure is surfaced
+        // as "no cookies could be decrypted" below rather than aborting.
+        #[cfg(windows)]
+        let win_key: Option<chromium_safestorage_core::RecoveredKey> =
+            local_state_path(&paths.cookies_db)
+                .as_ref()
+                .and_then(|p| recover_chromium_key_windows(p).ok());
+
         // Pick the candidate key by decrypting the probe cookie. Keyring schema
         // v1/v2/legacy derive different keys from the same entry, so the winner
         // is decided by trial rather than assumption. The blob and its own
         // domain come from the same `first_blob`, never from a second search.
+        #[cfg(not(windows))]
         let working_key: Option<[u8; 16]> = first_blob.as_ref().and_then(|(blob, host)| {
             candidate_keys
                 .iter()
                 .find(|k| decrypt_chromium_blob(blob, k, host).is_some())
                 .copied()
         });
+        #[cfg(windows)]
+        let working_key: Option<[u8; 16]> = None;
 
         let mut cookies = Vec::new();
         for mut cookie in filtered {
             if cookie.value.is_empty() && !cookie.encrypted_value.is_empty() {
-                match working_key
-                    .as_ref()
-                    .and_then(|k| decrypt_chromium_blob(&cookie.encrypted_value, k, &cookie.domain))
+                #[cfg(windows)]
                 {
-                    Some(v) => cookie.value = v,
-                    // A cookie that fails with the winning key is skipped
-                    // rather than aborting the capture: one malformed row must
-                    // not cost the user every other cookie for that site.
-                    None => continue,
+                    let mut decrypted = false;
+                    if let Some(key) = &win_key {
+                        if let Ok(plain) = key.decrypt_cookie(&cookie.encrypted_value) {
+                            let stripped = chromium_safestorage_core::strip_domain_hash(
+                                &plain,
+                                cookie.domain.as_bytes(),
+                            );
+                            if let Ok(v) = String::from_utf8(stripped.to_vec()) {
+                                cookie.value = v;
+                                decrypted = true;
+                            }
+                        }
+                    }
+                    if !decrypted {
+                        continue;
+                    }
+                }
+                #[cfg(not(windows))]
+                {
+                    match working_key.as_ref().and_then(|k| {
+                        decrypt_chromium_blob(&cookie.encrypted_value, k, &cookie.domain)
+                    }) {
+                        Some(v) => cookie.value = v,
+                        // A cookie that fails with the winning key is skipped
+                        // rather than aborting the capture: one malformed row must
+                        // not cost the user every other cookie for that site.
+                        None => continue,
+                    }
                 }
             }
             cookies.push(cookie);
@@ -1339,6 +1454,23 @@ pub fn capture_chromium(
                         .to_string()
                 }
             };
+            #[cfg(windows)]
+            let tried = format!(
+                "Windows cookie capture failed for {} (profile {}, {}-packed)\n  \
+                 db: {} (cookie schema v{}, {matching_encrypted} encrypted cookie(s) for this site)\n  \
+                 hint: make sure the browser profile belongs to the same Windows user running scrapmf,\n  \
+                 and that Local State contains os_crypt.encrypted_key",
+                paths.display,
+                if paths.profile.is_empty() {
+                    "-"
+                } else {
+                    &paths.profile
+                },
+                paths.origin,
+                paths.cookies_db.display(),
+                meta_version.map_or("unknown".to_string(), |v| v.to_string()),
+            );
+            #[cfg(not(windows))]
             let tried = format!(
                 "tried {} key(s) for {} · secret-tool: {secret_tool} · kwallet: {} · keyring: {keyring_state}\n  \
                  db: {} (profile {}, {}-packed, {}, cookie schema v{}, {matching_encrypted} encrypted cookie(s) for this site)\n  \

@@ -401,10 +401,53 @@ pub fn collect(verbose: u8) -> (Vec<CheckLine>, bool) {
             },
         });
     } else {
+        // Windows: report DPAPI / Local State availability per detected browser.
         out.push(CheckLine {
             level: Level::Info,
-            text: "Keyring diagnostics: not applicable on Windows".to_string(),
+            text: "Windows cookie capture uses DPAPI (current user) + AES-256-GCM".to_string(),
         });
+        for ch in crate::browsers::CHANNELS {
+            if let Some(db) = crate::browsers::find_cookie_db(ch, "Cookies") {
+                let ls = db.path.ancestors().find_map(|a| {
+                    if a.file_name().and_then(|n| n.to_str()) == Some("User Data") {
+                        Some(a.join("Local State"))
+                    } else {
+                        None
+                    }
+                });
+                let state = match ls {
+                    Some(p) if p.is_file() => {
+                        if let Ok(content) = std::fs::read_to_string(&p) {
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                                if json
+                                    .get("os_crypt")
+                                    .and_then(|o| o.get("encrypted_key"))
+                                    .and_then(serde_json::Value::as_str)
+                                    .is_some()
+                                {
+                                    "Local State OK"
+                                } else {
+                                    "no os_crypt.encrypted_key"
+                                }
+                            } else {
+                                "invalid Local State JSON"
+                            }
+                        } else {
+                            "cannot read Local State"
+                        }
+                    }
+                    _ => "Local State not found",
+                };
+                out.push(CheckLine {
+                    level: if state == "Local State OK" {
+                        Level::Success
+                    } else {
+                        Level::Warn
+                    },
+                    text: format!("{}: {}", ch.display, state),
+                });
+            }
+        }
     }
 
     // Check resolved backend binary is reachable

@@ -82,6 +82,33 @@ pub fn run(
         resolved_site.as_ref().map(|(_, s)| &**s),
     );
 
+    // On Windows, gallery-dl cannot read a live browser cookie DB (DPAPI +
+    // file locks). Prefer a captured profile: try to capture one now from the
+    // resolved browser and fall back to the browser source only if capture
+    // fails (gallery-dl will then report the underlying DPAPI error).
+    #[cfg(windows)]
+    let mut cookies_file = cookies_file;
+    #[cfg(windows)]
+    let mut cookies_from_browser = cookies_from_browser;
+    #[cfg(windows)]
+    if cookies_from_browser.is_some() {
+        let site_key = resolved_site
+            .as_ref()
+            .map(|(k, _)| (*k).clone())
+            .unwrap_or_else(|| "instagram".to_string());
+        if let Some(browser) = cookies_from_browser.clone() {
+            match crate::config::cookies::capture_chromium(&browser, &[site_key], "scrapmf") {
+                Ok((path, _)) => {
+                    cookies_file = Some(path);
+                    cookies_from_browser = None;
+                }
+                Err(e) => {
+                    crate::output::print_error(&e);
+                }
+            }
+        }
+    }
+
     // 4d. Build ScrapeRequest DTO (site > preset > CLI)
     let req = ScrapeRequest {
         url: validated.as_str().to_string(),
