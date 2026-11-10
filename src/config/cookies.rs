@@ -1155,7 +1155,11 @@ pub fn capture_chromium(
     #[cfg(windows)]
     if let Some(Err(e)) = &win_key_result {
         return Err(format!(
-            "Windows cookie capture failed for {} (profile {}, {}-packed): {e}\n  db: {}",
+            "Windows cookie capture failed for {} (profile {}, {}-packed)\n  \
+             db: {}\n  \
+             DPAPI error: {e}\n  \
+             hint: run scrapmf as the same Windows user that owns the browser profile,\n  \
+             and verify Local State exists at the expected path",
             paths.display,
             if paths.profile.is_empty() {
                 "-"
@@ -1527,9 +1531,8 @@ pub fn capture_chromium(
             }
             #[cfg(windows)]
             return Err(format!(
-                "no cookies could be decrypted for {} — {tried}\n  \
-                 help: make sure Brave/Chrome has been opened at least once by the same Windows user,\n  \
-                 and that Local State contains os_crypt.encrypted_key\n  \
+                "no cookies could be decrypted for {}\n  \
+                 {tried}\n  \
                  help: or import manually: install \"Get cookies.txt LOCALLY\" in the browser → Export →\n  \
                  Configuration → Cookie profiles → Import → From file",
                 domains.join(", "),
