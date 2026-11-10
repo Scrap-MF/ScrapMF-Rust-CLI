@@ -404,10 +404,15 @@ where
                 }
                 if key.kind == crossterm::event::KeyEventKind::Press {
                     match key.code {
-                        KeyCode::Up => log_scroll = log_scroll.saturating_add(1),
-                        KeyCode::Down => log_scroll = log_scroll.saturating_sub(1),
+                        KeyCode::Up | KeyCode::Char('k') | KeyCode::Char('K') => {
+                            log_scroll = log_scroll.saturating_add(1)
+                        }
+                        KeyCode::Down | KeyCode::Char('j') | KeyCode::Char('J') => {
+                            log_scroll = log_scroll.saturating_sub(1)
+                        }
                         KeyCode::PageUp => log_scroll = log_scroll.saturating_add(10),
                         KeyCode::PageDown => log_scroll = log_scroll.saturating_sub(10),
+                        KeyCode::Home => log_scroll = usize::MAX,
                         KeyCode::End => log_scroll = 0,
                         KeyCode::Enter if render_finished.load(Ordering::Relaxed) => {
                             render_exit.store(true, Ordering::Relaxed)

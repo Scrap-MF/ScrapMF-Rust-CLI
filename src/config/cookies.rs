@@ -1149,6 +1149,27 @@ pub fn capture_chromium(
     // keyring backend on Linux is a D-Bus client. Whether the DB actually needs
     // the keyring is determined below, once the rows are read, so a v10/plain
     // database keeps working on a machine with no D-Bus.
+    #[cfg(windows)]
+    let win_key_result =
+        local_state_path(&paths.cookies_db).map(|p| recover_chromium_key_windows(&p));
+    #[cfg(windows)]
+    if let Some(Err(e)) = &win_key_result {
+        return Err(format!(
+            "Windows cookie capture failed for {} (profile {}, {}-packed): {e}\n  db: {}",
+            paths.display,
+            if paths.profile.is_empty() {
+                "-"
+            } else {
+                &paths.profile
+            },
+            paths.origin,
+            paths.cookies_db.display(),
+        ));
+    }
+    #[cfg(windows)]
+    let win_key: Option<chromium_safestorage_core::RecoveredKey> =
+        win_key_result.and_then(|r| r.ok());
+
     let candidate_keys =
         chromium_candidate_keys(paths.secret_apps, paths.kwallet_folders, paths.kwallet_key);
 
@@ -1300,14 +1321,7 @@ pub fn capture_chromium(
             );
         }
 
-        // On Windows the safe-storage key comes from DPAPI + Local State and
-        // cookies are AES-256-GCM. Resolve it once here; a failure is surfaced
-        // as "no cookies could be decrypted" below rather than aborting.
-        #[cfg(windows)]
-        let win_key: Option<chromium_safestorage_core::RecoveredKey> =
-            local_state_path(&paths.cookies_db)
-                .as_ref()
-                .and_then(|p| recover_chromium_key_windows(p).ok());
+        // win_key resolved earlier (and any failure already returned).
 
         // Pick the candidate key by decrypting the probe cookie. Keyring schema
         // v1/v2/legacy derive different keys from the same entry, so the winner
@@ -1511,6 +1525,16 @@ pub fn capture_chromium(
             if bus.is_none() && needs_keyring {
                 return Err(keyring_unreachable_error(paths.display));
             }
+            #[cfg(windows)]
+            return Err(format!(
+                "no cookies could be decrypted for {} — {tried}\n  \
+                 help: make sure Brave/Chrome has been opened at least once by the same Windows user,\n  \
+                 and that Local State contains os_crypt.encrypted_key\n  \
+                 help: or import manually: install \"Get cookies.txt LOCALLY\" in the browser → Export →\n  \
+                 Configuration → Cookie profiles → Import → From file",
+                domains.join(", "),
+            ));
+            #[cfg(not(windows))]
             return Err(format!(
                 "no cookies could be decrypted for {} — {tried}\n  \
                  help: make sure the browser has been opened at least once, and that its \
