@@ -1123,6 +1123,7 @@ fn recover_chromium_key_windows(
 
     let ps_script = format!(
         r#"
+Add-Type -AssemblyName System.Security
 $blob = [System.IO.File]::ReadAllBytes('{}')
 try {{
     $dec = [System.Security.Cryptography.ProtectedData]::Unprotect($blob, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
