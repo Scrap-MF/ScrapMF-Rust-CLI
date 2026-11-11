@@ -1081,7 +1081,11 @@ fn chromium_time_to_unix(expires_utc_micros: i64) -> i64 {
 /// Locate the browser's `Local State` file from a cookie DB path.
 #[cfg(windows)]
 fn local_state_path(cookies_db: &std::path::Path) -> Option<std::path::PathBuf> {
-    for anc in cookies_db.ancestors() {
+    // Normalize mixed separators (/ and \) that appear in paths coming
+    // from gallery-dl or browsers on Windows.
+    let normalized = cookies_db.to_string_lossy().replace('/', "\\");
+    let path = std::path::Path::new(&normalized);
+    for anc in path.ancestors() {
         if anc.file_name().and_then(|n| n.to_str()) == Some("User Data") {
             return Some(anc.join("Local State"));
         }
