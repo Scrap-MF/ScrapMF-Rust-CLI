@@ -57,10 +57,19 @@ cargo install --git https://github.com/Scrap-MF/ScrapMF-Rust-CLI  # latest main
 cargo install --path .                 # or build from this repo
 ```
 
-**Windows (via WSL):**
+**Windows (native binary, WSL also works):**
 
-scrapmf has no native Windows binary. Install it inside WSL using the Linux
-one-liner above; from there the rest of this guide applies unchanged.
+scrapmf ships a native Windows build (MSVC, static CRT). Download the
+`.zip` from the latest release, or run:
+
+```powershell
+cargo install scrapmf
+cargo binstall scrapmf
+```
+
+On Windows, Firefox cookies read directly (plain SQLite). Chrome and Brave
+127+ use app-bound encryption, so automatic capture fails; use Firefox or
+import a Netscape `cookies.txt` (Configuration → Cookie profiles → Import).
 
 <details>
 <summary><strong>Termux (Android)</strong></summary>
@@ -88,7 +97,8 @@ scrapmf --version
 | Linux x86_64 / ARM64 / ARM32 | static musl + dynamic gnu |
 | Linux RISC-V 64 / POWER 64 LE | dynamic gnu |
 | Android (Termux) | static musl |
-| Windows | via WSL (use the Linux build) |
+| Windows (native) | MSVC build; Firefox cookies read directly, Chrome/Brave 127+ needs manual import |
+| Windows (WSL) | use the Linux build |
 | macOS | build from source with `cargo install --path .` |
 
 ---
