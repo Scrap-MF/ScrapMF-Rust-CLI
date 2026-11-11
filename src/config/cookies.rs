@@ -1690,7 +1690,7 @@ pub fn capture_chromium(
     let _ = tmp_dir;
     result
 }
- 
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
