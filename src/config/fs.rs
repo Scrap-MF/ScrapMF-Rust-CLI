@@ -79,7 +79,7 @@ pub(crate) fn restrict_perms(path: &Path, dir: bool) {
         let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode));
     }
     #[cfg(not(unix))]
-    let _ = path;
+    let _ = (path, dir);
 }
 
 #[cfg(test)]

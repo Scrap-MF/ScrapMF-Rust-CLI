@@ -92,26 +92,37 @@ pub fn run(
     let mut cookies_from_browser = cookies_from_browser;
     #[cfg(windows)]
     if cookies_from_browser.is_some() {
-        let site_key = resolved_site
-            .as_ref()
-            .map(|(k, _)| (*k).clone())
-            .unwrap_or_else(|| "instagram".to_string());
-        if let Some(browser) = cookies_from_browser.clone() {
-            let auto_name = crate::config::cookies::auto_profile_name(&browser);
-            match crate::config::cookies::capture_chromium(&browser, &[site_key], &auto_name) {
-                Ok((path, _)) => {
-                    cookies_file = Some(path);
-                    cookies_from_browser = None;
-                }
-                Err(e) => {
-                    crate::output::print_error(&e);
-                    crate::output::print_help(
-                        "create a cookie profile in scrapmf (Configuration -> Cookie profiles), use Firefox, or export cookies to a Netscape cookies.txt and pass --cookies <file>",
-                    );
-                    // Do not fall back to gallery-dl's own browser-cookie reader on
-                    // Windows: it cannot handle DPAPI and only repeats the error.
-                    cookies_from_browser = None;
-                    return Err(anyhow::anyhow!("cookie capture failed"));
+        // Firefox stores cookies in plain text in cookies.sqlite, so gallery-dl
+        // can read them directly on Windows without DPAPI capture. Only
+        // Chromium-family browsers need the capture step below.
+        let browser = cookies_from_browser
+            .as_deref()
+            .unwrap_or_default()
+            .split(':')
+            .next()
+            .unwrap_or_default();
+        let is_firefox = browser.eq_ignore_ascii_case("firefox");
+        if !is_firefox {
+            let site_key = resolved_site
+                .as_ref()
+                .map(|(k, _)| (*k).clone())
+                .unwrap_or_else(|| "instagram".to_string());
+            if let Some(browser) = cookies_from_browser.clone() {
+                let auto_name = crate::config::cookies::auto_profile_name(&browser);
+                match crate::config::cookies::capture_chromium(&browser, &[site_key], &auto_name) {
+                    Ok((path, _)) => {
+                        cookies_file = Some(path);
+                        cookies_from_browser = None;
+                    }
+                    Err(e) => {
+                        crate::output::print_error(&e);
+                        crate::output::print_help(
+                            "create a cookie profile in scrapmf (Configuration -> Cookie profiles), use Firefox, or export cookies to a Netscape cookies.txt and pass --cookies <file>",
+                        );
+                        // Do not fall back to gallery-dl's own browser-cookie reader on
+                        // Windows: it cannot handle DPAPI and only repeats the error.
+                        return Err(anyhow::anyhow!("cookie capture failed"));
+                    }
                 }
             }
         }

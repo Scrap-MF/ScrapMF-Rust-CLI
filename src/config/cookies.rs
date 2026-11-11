@@ -797,6 +797,7 @@ pub fn keyring_outside_namespace_for_doctor() -> bool {
 /// `DBUS_SESSION_BUS_ADDRESS` changes nothing — the socket is in the host
 /// namespace — so the keyring-free import path is offered first, and the chroot
 /// case is named explicitly instead of being lumped in with "no D-Bus".
+#[allow(dead_code)]
 fn keyring_unreachable_error(display: &str) -> String {
     let cause = if keyring_outside_namespace() {
         format!(
@@ -1000,6 +1001,7 @@ fn chromium_candidate_keys(
 /// first 32 bytes really are the digest of this cookie's domain. That keeps
 /// legitimate values of 32 bytes or more intact, and surfaces a value moved
 /// between domains rather than silently accepting it.
+#[allow(dead_code)]
 fn strip_domain_hash<'a>(plaintext: &'a [u8], host_key: &str) -> &'a [u8] {
     use sha2::{Digest, Sha256};
     const DOMAIN_HASH_LEN: usize = 32;
@@ -1021,6 +1023,7 @@ fn strip_domain_hash<'a>(plaintext: &'a [u8], host_key: &str) -> &'a [u8] {
 /// `host_key` is the cookie's domain as stored in the database (`host_key`
 /// column verbatim, leading dot included) and is only used to verify the
 /// optional 32-byte prefix, so a wrong caller can never truncate a value.
+#[allow(dead_code)]
 fn decrypt_chromium_blob(blob: &[u8], key: &[u8; 16], host_key: &str) -> Option<String> {
     use aes::Aes128;
     use aes::cipher::{Array, BlockCipherDecrypt, KeyInit};
@@ -1281,8 +1284,11 @@ pub fn capture_chromium(
     let win_key: Option<chromium_safestorage_core::RecoveredKey> =
         win_key_result.and_then(|r| r.ok());
 
+    #[cfg(not(windows))]
     let candidate_keys =
         chromium_candidate_keys(paths.secret_apps, paths.kwallet_folders, paths.kwallet_key);
+    #[cfg(windows)]
+    let _candidate_keys: Vec<[u8; 16]> = Vec::new();
 
     // Copy into a private, randomly-named temp directory (0o700) so other
     // users cannot guess or pre-create the path (symlink/TOCTOU hardening).
@@ -1424,6 +1430,7 @@ pub fn capture_chromium(
         let needs_keyring = first_blob
             .as_ref()
             .is_some_and(|(b, _)| b.starts_with(b"v11") || b.starts_with(b"v12"));
+        #[cfg(not(windows))]
         if needs_keyring {
             tracing::debug!(
                 bus = resolve_dbus_address().is_some(),
@@ -1431,6 +1438,8 @@ pub fn capture_chromium(
                 "cookie DB is keyring-encrypted"
             );
         }
+        #[cfg(windows)]
+        let _ = needs_keyring;
 
         // win_key resolved earlier (and any failure already returned).
 
@@ -1446,7 +1455,7 @@ pub fn capture_chromium(
                 .copied()
         });
         #[cfg(windows)]
-        let working_key: Option<[u8; 16]> = None;
+        let _working_key: Option<[u8; 16]> = None;
 
         let mut cookies = Vec::new();
         for mut cookie in filtered {
@@ -1533,11 +1542,13 @@ pub fn capture_chromium(
                     paths.display,
                 ));
             }
+            #[cfg(not(windows))]
             let kwallet_bins: Vec<&str> = KWALLET_BINARIES
                 .iter()
                 .copied()
                 .filter(|b| which::which(b).is_ok())
                 .collect();
+            #[cfg(not(windows))]
             let secret_tool = if which::which("secret-tool").is_ok() {
                 "found"
             } else {
@@ -1548,8 +1559,11 @@ pub fn capture_chromium(
             // variable — rather than from the bus and the wallet themselves —
             // is what made an earlier version of this message report a working
             // keyring as broken.
+            #[cfg(not(windows))]
             let bus = resolve_dbus_address();
+            #[cfg(not(windows))]
             let wallet_client_present = !kwallet_bins.is_empty();
+            #[cfg(not(windows))]
             let keyring_state = match (&bus, needs_keyring, candidate_keys.is_empty()) {
                 (None, true, _) if keyring_outside_namespace() => {
                     "the D-Bus socket /run/user/<uid>/bus is not visible here (chroot, \
@@ -1624,6 +1638,7 @@ pub fn capture_chromium(
             // Schema 24+ binds each value to its domain, so when the keys exist
             // but nothing decrypts, the keyring entry is the thing to check —
             // saying so is more useful than restating that decryption failed.
+            #[cfg(not(windows))]
             if has_domain_hash && candidate_keys.len() > 1 {
                 tracing::debug!(
                     meta_version,
@@ -1641,7 +1656,7 @@ pub fn capture_chromium(
             #[cfg(windows)]
             {
                 let decrypt_err = if let Some(key) = &win_key {
-                    if let Some((blob, host)) = &first_blob {
+                    if let Some((blob, _host)) = &first_blob {
                         match key.decrypt_cookie(blob) {
                             Ok(_) => "key recovered but plaintext did not match (domain hash?)"
                                 .to_string(),
