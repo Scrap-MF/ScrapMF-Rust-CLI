@@ -1113,16 +1113,51 @@ fn recover_chromium_key_windows(
         .ok_or_else(|| "no os_crypt.encrypted_key in Local State".to_string())?;
     let blob = dpapi_core::parse_local_state_encrypted_key(encrypted_key_b64.as_bytes())
         .map_err(|e| format!("invalid encrypted_key: {e}"))?;
+
+    let blob_path = std::env::temp_dir().join(format!("scrapmf-dpapi-{}.bin", std::process::id()));
+    std::fs::write(&blob_path, &blob)
+        .map_err(|e| format!("cannot write DPAPI blob temp file: {e}"))?;
+
+    let key_path =
+        std::env::temp_dir().join(format!("scrapmf-dpapi-key-{}.bin", std::process::id()));
+
+    let ps_script = format!(
+        r#"
+$blob = [System.IO.File]::ReadAllBytes('{}')
+try {{
+    $dec = [System.Security.Cryptography.ProtectedData]::Unprotect($blob, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+    [System.IO.File]::WriteAllBytes('{}', $dec)
+}} catch {{
+    Write-Error $_.Exception.Message
+    exit 1
+}}
+"#,
+        blob_path.display().to_string().replace('\\', "\\\\"),
+        key_path.display().to_string().replace('\\', "\\\\")
+    );
+
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &ps_script])
+        .output()
+        .map_err(|e| format!("failed to run PowerShell: {e}"))?;
+
+    let _ = std::fs::remove_file(&blob_path);
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let _ = std::fs::remove_file(&key_path);
+        return Err(format!("PowerShell DPAPI failed: {}", stderr.trim()));
+    }
+
     let key_bytes =
-        windows_dpapi::decrypt_data(&blob, windows_dpapi::Scope::User, None).map_err(|e| {
-            format!(
-                "DPAPI decryption failed (run as the same user that owns the browser profile): {e}"
-            )
-        })?;
+        std::fs::read(&key_path).map_err(|e| format!("cannot read decrypted key: {e}"))?;
+    let _ = std::fs::remove_file(&key_path);
+
     let key: [u8; 32] = key_bytes
         .as_slice()
         .try_into()
         .map_err(|_| format!("DPAPI returned {} bytes, expected 32", key_bytes.len()))?;
+
     Ok(chromium_safestorage_core::RecoveredKey::Aes256Gcm(key))
 }
 
