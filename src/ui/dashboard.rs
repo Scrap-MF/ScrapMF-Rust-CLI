@@ -344,6 +344,16 @@ where
     // Reset any stale abort request from a previous run
     abort.store(false, Ordering::Relaxed);
 
+    // Restore the terminal on panic so a crash does not leave the console
+    // in raw mode / alternate screen (which makes text look garbled and
+    // prevents Ctrl+C / Alt+F4 from working normally).
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+        original_hook(info);
+    }));
+
     let guard = match TerminalGuard::enter() {
         Ok(guard) => guard,
         Err(e) => {

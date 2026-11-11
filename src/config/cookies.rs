@@ -1094,6 +1094,9 @@ fn local_state_path(cookies_db: &std::path::Path) -> Option<std::path::PathBuf> 
 }
 
 /// Recover the Chromium safe-storage key on Windows via DPAPI (current user).
+///
+/// Uses Python + ctypes to call CryptUnprotectData exactly the way gallery-dl
+/// does, guaranteeing the same code path that already works in the user's venv.
 #[cfg(windows)]
 fn recover_chromium_key_windows(
     local_state_path: &std::path::Path,
@@ -1111,48 +1114,75 @@ fn recover_chromium_key_windows(
         .and_then(|o| o.get("encrypted_key"))
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "no os_crypt.encrypted_key in Local State".to_string())?;
-    let blob = dpapi_core::parse_local_state_encrypted_key(encrypted_key_b64.as_bytes())
-        .map_err(|e| format!("invalid encrypted_key: {e}"))?;
 
-    let blob_path = std::env::temp_dir().join(format!("scrapmf-dpapi-{}.bin", std::process::id()));
-    std::fs::write(&blob_path, &blob)
-        .map_err(|e| format!("cannot write DPAPI blob temp file: {e}"))?;
+    // Validate the prefix early.
+    use base64::Engine;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(encrypted_key_b64)
+        .map_err(|e| format!("invalid base64 in encrypted_key: {e}"))?;
+    if !decoded.starts_with(b"DPAPI") {
+        return Err("invalid Local State key: missing DPAPI prefix".to_string());
+    }
 
-    let key_path =
-        std::env::temp_dir().join(format!("scrapmf-dpapi-key-{}.bin", std::process::id()));
+    // Resolve Python binary: prefer the scrapmf venv, then PATH.
+    let python = resolve_python_binary();
 
-    let ps_script = format!(
-        r#"
-Add-Type -AssemblyName System.Security
-$blob = [System.IO.File]::ReadAllBytes('{}')
-try {{
-    $dec = [System.Security.Cryptography.ProtectedData]::Unprotect($blob, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
-    [System.IO.File]::WriteAllBytes('{}', $dec)
-}} catch {{
-    Write-Error $_.Exception.Message
-    exit 1
-}}
-"#,
-        blob_path.display().to_string().replace('\\', "\\\\"),
-        key_path.display().to_string().replace('\\', "\\\\")
-    );
+    let ps = r#"
+import base64, json, ctypes, sys
+from ctypes.wintypes import DWORD
 
-    let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-Command", &ps_script])
+def main():
+    local_state_path = sys.argv[1]
+    with open(local_state_path, encoding='utf-8') as f:
+        data = json.load(f)
+    encrypted_key = base64.b64decode(data['os_crypt']['encrypted_key'])
+    prefix = b'DPAPI'
+    if not encrypted_key.startswith(prefix):
+        print('ERROR: invalid prefix', file=sys.stderr)
+        sys.exit(1)
+    blob = encrypted_key[len(prefix):]
+
+    class DATA_BLOB(ctypes.Structure):
+        _fields_ = [('cbData', DWORD), ('pbData', ctypes.POINTER(ctypes.c_char))]
+
+    buffer = ctypes.create_string_buffer(blob)
+    blob_in = DATA_BLOB(len(blob), buffer)
+    blob_out = DATA_BLOB()
+    ret = ctypes.windll.crypt32.CryptUnprotectData(
+        ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out))
+    if not ret:
+        err = ctypes.GetLastError()
+        print(f'ERROR: CryptUnprotectData failed (error {err})', file=sys.stderr)
+        sys.exit(1)
+
+    result = ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    ctypes.windll.kernel32.LocalFree(blob_out.pbData)
+    print(base64.b64encode(result).decode())
+
+if __name__ == '__main__':
+    main()
+"#;
+
+    let output = std::process::Command::new(&python)
+        .arg("-c")
+        .arg(ps)
+        .arg(local_state_path)
         .output()
-        .map_err(|e| format!("failed to run PowerShell: {e}"))?;
-
-    let _ = std::fs::remove_file(&blob_path);
+        .map_err(|e| format!("failed to run Python ({}): {e}", python.display()))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let _ = std::fs::remove_file(&key_path);
-        return Err(format!("PowerShell DPAPI failed: {}", stderr.trim()));
+        return Err(format!("Python DPAPI failed: {}", stderr.trim()));
     }
 
-    let key_bytes =
-        std::fs::read(&key_path).map_err(|e| format!("cannot read decrypted key: {e}"))?;
-    let _ = std::fs::remove_file(&key_path);
+    let key_b64 = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if key_b64.is_empty() {
+        return Err("Python returned empty key".to_string());
+    }
+
+    let key_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&key_b64)
+        .map_err(|e| format!("invalid base64 from Python: {e}"))?;
 
     let key: [u8; 32] = key_bytes
         .as_slice()
@@ -1160,6 +1190,30 @@ try {{
         .map_err(|_| format!("DPAPI returned {} bytes, expected 32", key_bytes.len()))?;
 
     Ok(chromium_safestorage_core::RecoveredKey::Aes256Gcm(key))
+}
+
+/// Resolve the Python binary: prefer the scrapmf venv, then PATH.
+#[cfg(windows)]
+fn resolve_python_binary() -> std::path::PathBuf {
+    // 1. scrapmf venv
+    if let Some(data_dir) = dirs::data_dir() {
+        let venv_python = data_dir
+            .join("scrapmf")
+            .join("venv")
+            .join("Scripts")
+            .join("python.exe");
+        if venv_python.is_file() {
+            return venv_python;
+        }
+    }
+    // 2. PATH
+    if let Ok(p) = which::which("python") {
+        return p;
+    }
+    if let Ok(p) = which::which("python3") {
+        return p;
+    }
+    std::path::PathBuf::from("python")
 }
 
 pub fn capture_chromium(
