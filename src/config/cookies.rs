@@ -1150,8 +1150,13 @@ pub fn capture_chromium(
     // the keyring is determined below, once the rows are read, so a v10/plain
     // database keeps working on a machine with no D-Bus.
     #[cfg(windows)]
-    let win_key_result =
-        local_state_path(&paths.cookies_db).map(|p| recover_chromium_key_windows(&p));
+    let win_key_result = match local_state_path(&paths.cookies_db) {
+        Some(p) => Some(recover_chromium_key_windows(&p)),
+        None => Some(Err(format!(
+            "Local State not found: could not locate 'User Data' directory from {}",
+            paths.cookies_db.display()
+        ))),
+    };
     #[cfg(windows)]
     if let Some(Err(e)) = &win_key_result {
         return Err(format!(
@@ -1530,13 +1535,29 @@ pub fn capture_chromium(
                 return Err(keyring_unreachable_error(paths.display));
             }
             #[cfg(windows)]
-            return Err(format!(
-                "no cookies could be decrypted for {}\n  \
-                 {tried}\n  \
-                 help: or import manually: install \"Get cookies.txt LOCALLY\" in the browser → Export →\n  \
-                 Configuration → Cookie profiles → Import → From file",
-                domains.join(", "),
-            ));
+            {
+                let decrypt_err = if let Some(key) = &win_key {
+                    if let Some((blob, host)) = &first_blob {
+                        match key.decrypt_cookie(blob) {
+                            Ok(_) => "key recovered but plaintext did not match (domain hash?)"
+                                .to_string(),
+                            Err(e) => format!("key recovered but cookie decrypt failed: {e}"),
+                        }
+                    } else {
+                        "no encrypted cookie sample collected".to_string()
+                    }
+                } else {
+                    "key recovery returned no key (see DPAPI error above)".to_string()
+                };
+                return Err(format!(
+                    "no cookies could be decrypted for {}\n  \
+                     {tried}\n  \
+                     DPAPI/AES-GCM: {decrypt_err}\n  \
+                     help: or import manually: install \"Get cookies.txt LOCALLY\" in the browser → Export →\n  \
+                     Configuration → Cookie profiles → Import → From file",
+                    domains.join(", "),
+                ));
+            }
             #[cfg(not(windows))]
             return Err(format!(
                 "no cookies could be decrypted for {} — {tried}\n  \
