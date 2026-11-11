@@ -273,22 +273,35 @@ fn draw(
     if show_logs {
         let rows = usize::from(chunks[1].height.saturating_sub(2)).max(1);
         let all: Vec<&String> = state.logs.iter().collect();
+        let max_width = usize::from(chunks[1].width.saturating_sub(2)).max(1);
         let window = log_window(&all, log_scroll, rows);
         let log_lines: Vec<Line> = window
             .iter()
-            .map(|l| {
+            .flat_map(|l| {
                 let raw = l.as_str();
-                if raw.starts_with('✔') {
-                    Line::styled(format!("· {raw}"), Style::default().fg(Color::Green))
-                } else if raw.contains("[warning]") || raw.starts_with('⚠') {
-                    Line::styled(format!("· {raw}"), Style::default().fg(Color::Yellow))
-                } else if raw.contains("[error]") || raw.contains("failed:") {
-                    Line::styled(format!("· {raw}"), Style::default().fg(Color::Red))
-                } else if raw.contains("retrying") {
-                    Line::styled(format!("· {raw}"), Style::default().fg(Color::Yellow))
+                // Hard-wrap long lines so they never overflow the panel on
+                // narrow terminals (Windows Terminal included).
+                let chunks: Vec<&str> = if raw.len() <= max_width {
+                    vec![raw]
                 } else {
-                    Line::from(format!("· {raw}"))
-                }
+                    raw.as_bytes()
+                        .chunks(max_width)
+                        .map(|c| std::str::from_utf8(c).unwrap_or(raw))
+                        .collect()
+                };
+                chunks.into_iter().map(|chunk| {
+                    if chunk.starts_with('✔') {
+                        Line::styled(format!("· {chunk}"), Style::default().fg(Color::Green))
+                    } else if chunk.contains("[warning]") || chunk.starts_with('⚠') {
+                        Line::styled(format!("· {chunk}"), Style::default().fg(Color::Yellow))
+                    } else if chunk.contains("[error]") || chunk.contains("failed:") {
+                        Line::styled(format!("· {chunk}"), Style::default().fg(Color::Red))
+                    } else if chunk.contains("retrying") {
+                        Line::styled(format!("· {chunk}"), Style::default().fg(Color::Yellow))
+                    } else {
+                        Line::from(format!("· {chunk}"))
+                    }
+                })
             })
             .collect();
         let title = if log_scroll > 0 {
@@ -330,6 +343,16 @@ where
 {
     // Reset any stale abort request from a previous run
     abort.store(false, Ordering::Relaxed);
+
+    // Restore the terminal on panic so a crash does not leave the console
+    // in raw mode / alternate screen (which makes text look garbled and
+    // prevents Ctrl+C / Alt+F4 from working normally).
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+        original_hook(info);
+    }));
 
     let guard = match TerminalGuard::enter() {
         Ok(guard) => guard,
@@ -404,10 +427,15 @@ where
                 }
                 if key.kind == crossterm::event::KeyEventKind::Press {
                     match key.code {
-                        KeyCode::Up => log_scroll = log_scroll.saturating_add(1),
-                        KeyCode::Down => log_scroll = log_scroll.saturating_sub(1),
+                        KeyCode::Up | KeyCode::Char('k') | KeyCode::Char('K') => {
+                            log_scroll = log_scroll.saturating_add(1)
+                        }
+                        KeyCode::Down | KeyCode::Char('j') | KeyCode::Char('J') => {
+                            log_scroll = log_scroll.saturating_sub(1)
+                        }
                         KeyCode::PageUp => log_scroll = log_scroll.saturating_add(10),
                         KeyCode::PageDown => log_scroll = log_scroll.saturating_sub(10),
+                        KeyCode::Home => log_scroll = usize::MAX,
                         KeyCode::End => log_scroll = 0,
                         KeyCode::Enter if render_finished.load(Ordering::Relaxed) => {
                             render_exit.store(true, Ordering::Relaxed)

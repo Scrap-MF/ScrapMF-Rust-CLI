@@ -1086,7 +1086,11 @@ fn chromium_time_to_unix(expires_utc_micros: i64) -> i64 {
 /// Locate the browser's `Local State` file from a cookie DB path.
 #[cfg(windows)]
 fn local_state_path(cookies_db: &std::path::Path) -> Option<std::path::PathBuf> {
-    for anc in cookies_db.ancestors() {
+    // Normalize mixed separators (/ and \) that appear in paths coming
+    // from gallery-dl or browsers on Windows.
+    let normalized = cookies_db.to_string_lossy().replace('/', "\\");
+    let path = std::path::Path::new(&normalized);
+    for anc in path.ancestors() {
         if anc.file_name().and_then(|n| n.to_str()) == Some("User Data") {
             return Some(anc.join("Local State"));
         }
@@ -1095,6 +1099,9 @@ fn local_state_path(cookies_db: &std::path::Path) -> Option<std::path::PathBuf> 
 }
 
 /// Recover the Chromium safe-storage key on Windows via DPAPI (current user).
+///
+/// Uses Python + ctypes to call CryptUnprotectData exactly the way gallery-dl
+/// does, guaranteeing the same code path that already works in the user's venv.
 #[cfg(windows)]
 fn recover_chromium_key_windows(
     local_state_path: &std::path::Path,
@@ -1112,14 +1119,76 @@ fn recover_chromium_key_windows(
         .and_then(|o| o.get("encrypted_key"))
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "no os_crypt.encrypted_key in Local State".to_string())?;
-    let blob = dpapi_core::parse_local_state_encrypted_key(encrypted_key_b64.as_bytes())
-        .map_err(|e| format!("invalid encrypted_key: {e}"))?;
-    let key_bytes =
-        windows_dpapi::decrypt_data(&blob, windows_dpapi::Scope::User, None).map_err(|e| {
-            format!(
-                "DPAPI decryption failed (run as the same user that owns the browser profile): {e}"
-            )
-        })?;
+
+    // Validate the prefix early.
+    use base64::Engine;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(encrypted_key_b64)
+        .map_err(|e| format!("invalid base64 in encrypted_key: {e}"))?;
+    if !decoded.starts_with(b"DPAPI") {
+        return Err("invalid Local State key: missing DPAPI prefix".to_string());
+    }
+
+    // Resolve Python binary: prefer the scrapmf venv, then PATH.
+    let python = resolve_python_binary();
+
+    let ps = r#"
+import base64, json, ctypes, sys
+from ctypes.wintypes import DWORD
+
+def main():
+    local_state_path = sys.argv[1]
+    with open(local_state_path, encoding='utf-8') as f:
+        data = json.load(f)
+    encrypted_key = base64.b64decode(data['os_crypt']['encrypted_key'])
+    prefix = b'DPAPI'
+    if not encrypted_key.startswith(prefix):
+        print('ERROR: invalid prefix', file=sys.stderr)
+        sys.exit(1)
+    blob = encrypted_key[len(prefix):]
+
+    class DATA_BLOB(ctypes.Structure):
+        _fields_ = [('cbData', DWORD), ('pbData', ctypes.POINTER(ctypes.c_char))]
+
+    buffer = ctypes.create_string_buffer(blob)
+    blob_in = DATA_BLOB(len(blob), buffer)
+    blob_out = DATA_BLOB()
+    ret = ctypes.windll.crypt32.CryptUnprotectData(
+        ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out))
+    if not ret:
+        err = ctypes.GetLastError()
+        print(f'ERROR: CryptUnprotectData failed (error {err})', file=sys.stderr)
+        sys.exit(1)
+
+    result = ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    ctypes.windll.kernel32.LocalFree(blob_out.pbData)
+    print(base64.b64encode(result).decode())
+
+if __name__ == '__main__':
+    main()
+"#;
+
+    let output = std::process::Command::new(&python)
+        .arg("-c")
+        .arg(ps)
+        .arg(local_state_path)
+        .output()
+        .map_err(|e| format!("failed to run Python ({}): {e}", python.display()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Python DPAPI failed: {}", stderr.trim()));
+    }
+
+    let key_b64 = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if key_b64.is_empty() {
+        return Err("Python returned empty key".to_string());
+    }
+
+    let key_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&key_b64)
+        .map_err(|e| format!("invalid base64 from Python: {e}"))?;
+
     let key: [u8; 32] = key_bytes
         .as_slice()
         .try_into()
@@ -1127,7 +1196,32 @@ fn recover_chromium_key_windows(
     use zeroize::Zeroize;
     let mut kb = key_bytes;
     kb.zeroize();
+
     Ok(chromium_safestorage_core::RecoveredKey::Aes256Gcm(key))
+}
+
+/// Resolve the Python binary: prefer the scrapmf venv, then PATH.
+#[cfg(windows)]
+fn resolve_python_binary() -> std::path::PathBuf {
+    // 1. scrapmf venv
+    if let Some(data_dir) = dirs::data_dir() {
+        let venv_python = data_dir
+            .join("scrapmf")
+            .join("venv")
+            .join("Scripts")
+            .join("python.exe");
+        if venv_python.is_file() {
+            return venv_python;
+        }
+    }
+    // 2. PATH
+    if let Ok(p) = which::which("python") {
+        return p;
+    }
+    if let Ok(p) = which::which("python3") {
+        return p;
+    }
+    std::path::PathBuf::from("python")
 }
 
 pub fn capture_chromium(
@@ -1157,13 +1251,41 @@ pub fn capture_chromium(
     // keyring backend on Linux is a D-Bus client. Whether the DB actually needs
     // the keyring is determined below, once the rows are read, so a v10/plain
     // database keeps working on a machine with no D-Bus.
+    #[cfg(windows)]
+    let win_key_result = match local_state_path(&paths.cookies_db) {
+        Some(p) => Some(recover_chromium_key_windows(&p)),
+        None => Some(Err(format!(
+            "Local State not found: could not locate 'User Data' directory from {}",
+            paths.cookies_db.display()
+        ))),
+    };
+    #[cfg(windows)]
+    if let Some(Err(e)) = &win_key_result {
+        return Err(format!(
+            "Windows cookie capture failed for {} (profile {}, {}-packed)\n  \
+             db: {}\n  \
+             DPAPI error: {e}\n  \
+             hint: run scrapmf as the same Windows user that owns the browser profile,\n  \
+             and verify Local State exists at the expected path",
+            paths.display,
+            if paths.profile.is_empty() {
+                "-"
+            } else {
+                &paths.profile
+            },
+            paths.origin,
+            paths.cookies_db.display(),
+        ));
+    }
+    #[cfg(windows)]
+    let win_key: Option<chromium_safestorage_core::RecoveredKey> =
+        win_key_result.and_then(|r| r.ok());
+
     let candidate_keys =
         chromium_candidate_keys(paths.secret_apps, paths.kwallet_folders, paths.kwallet_key);
 
     // Copy into a private, randomly-named temp directory (0o700) so other
     // users cannot guess or pre-create the path (symlink/TOCTOU hardening).
-    // Sidecar names (-wal/-shm) must keep the same stem as the DB, which is
-    // safe because the directory itself is random and owner-only.
     let tmp_dir = tempfile::TempDir::new().map_err(|e| format!("create temp dir: {e}"))?;
     let tmp = tmp_dir.path().join("cookies.sqlite");
     crate::config::fs::restrict_perms(tmp_dir.path(), true);
@@ -1310,14 +1432,7 @@ pub fn capture_chromium(
             );
         }
 
-        // On Windows the safe-storage key comes from DPAPI + Local State and
-        // cookies are AES-256-GCM. Resolve it once here; a failure is surfaced
-        // as "no cookies could be decrypted" below rather than aborting.
-        #[cfg(windows)]
-        let win_key: Option<chromium_safestorage_core::RecoveredKey> =
-            local_state_path(&paths.cookies_db)
-                .as_ref()
-                .and_then(|p| recover_chromium_key_windows(p).ok());
+        // win_key resolved earlier (and any failure already returned).
 
         // Pick the candidate key by decrypting the probe cookie. Keyring schema
         // v1/v2/legacy derive different keys from the same entry, so the winner
@@ -1524,15 +1639,31 @@ pub fn capture_chromium(
                 return Err(keyring_unreachable_error(paths.display));
             }
             #[cfg(windows)]
-            return Err(format!(
-                "no cookies could be decrypted for {}\n  \
-                 {tried}\n  \
-                 help: if the browser is Chrome/Brave 127+, cookies use app-bound encryption and\n  \
-                 cannot be decrypted externally — import manually (Get cookies.txt LOCALLY -> Export)\n  \
-                 or use Firefox; otherwise verify the profile belongs to the same Windows user\n  \
-                 and that Local State contains os_crypt.encrypted_key",
-                domains.join(", "),
-            ));
+            {
+                let decrypt_err = if let Some(key) = &win_key {
+                    if let Some((blob, host)) = &first_blob {
+                        match key.decrypt_cookie(blob) {
+                            Ok(_) => "key recovered but plaintext did not match (domain hash?)"
+                                .to_string(),
+                            Err(e) => format!("key recovered but cookie decrypt failed: {e}"),
+                        }
+                    } else {
+                        "no encrypted cookie sample collected".to_string()
+                    }
+                } else {
+                    "key recovery returned no key (see DPAPI error above)".to_string()
+                };
+                return Err(format!(
+                    "no cookies could be decrypted for {}\n  \
+                     {tried}\n  \
+                     DPAPI/AES-GCM: {decrypt_err}\n  \
+                     help: if the browser is Chrome/Brave 127+, cookies use app-bound encryption and\n  \
+                     cannot be decrypted externally — import manually (Get cookies.txt LOCALLY -> Export)\n  \
+                     or use Firefox; otherwise verify the profile belongs to the same Windows user\n  \
+                     and that Local State contains os_crypt.encrypted_key",
+                    domains.join(", "),
+                ));
+            }
             #[cfg(not(windows))]
             return Err(format!(
                 "no cookies could be decrypted for {} — {tried}\n  \
@@ -1559,7 +1690,7 @@ pub fn capture_chromium(
     let _ = tmp_dir;
     result
 }
-
+ 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {

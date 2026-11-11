@@ -407,8 +407,29 @@ pub fn notice(context: &str, lines: &[String]) -> Step<()> {
         guard: _guard,
     } = &mut boxed;
 
+    // Hard-wrap long lines so they never overflow the boxed notice.
+    const MAX_W: usize = 78;
+    let mut wrapped: Vec<String> = Vec::new();
+    for line in lines {
+        if line.len() <= MAX_W {
+            wrapped.push(line.clone());
+        } else {
+            let mut rest = line.as_str();
+            while !rest.is_empty() {
+                let mut idx = rest.len().min(MAX_W);
+                while idx > 0 && !rest.is_char_boundary(idx) {
+                    idx -= 1;
+                }
+                if idx == 0 {
+                    idx = 1;
+                }
+                wrapped.push(rest[..idx].to_string());
+                rest = &rest[idx..];
+            }
+        }
+    }
     loop {
-        let body: Vec<ratatui::text::Line<'_>> = lines
+        let body: Vec<ratatui::text::Line<'_>> = wrapped
             .iter()
             .map(|line| {
                 use ratatui::style::{Color, Style};

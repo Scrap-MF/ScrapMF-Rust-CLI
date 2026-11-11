@@ -105,6 +105,13 @@ pub fn run(
                 }
                 Err(e) => {
                     crate::output::print_error(&e);
+                    crate::output::print_help(
+                        "create a cookie profile in scrapmf (Configuration -> Cookie profiles), use Firefox, or export cookies to a Netscape cookies.txt and pass --cookies <file>",
+                    );
+                    // Do not fall back to gallery-dl's own browser-cookie reader on
+                    // Windows: it cannot handle DPAPI and only repeats the error.
+                    cookies_from_browser = None;
+                    return Err(anyhow::anyhow!("cookie capture failed"));
                 }
             }
         }

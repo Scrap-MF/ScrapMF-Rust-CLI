@@ -429,6 +429,31 @@ pub fn scrape_with_hooks(
     // threads keeps its own ledger beside the media, so ours is bridged into
     // it directly instead. Both end up in the same JSONL.
     let mut req = req.clone();
+
+    // Windows capture-first: gallery-dl cannot read a live browser cookie DB
+    // (DPAPI + file locks). Resolve the browser source to a captured profile
+    // before building args; if capture fails, drop the browser source so we do
+    // not hand gallery-dl a source it cannot use.
+    #[cfg(windows)]
+    if req.cookies_file.is_none()
+        && let Some(browser) = req.cookies_from_browser.clone()
+    {
+        let site_key = crate::application::archive::site_account_from_url(&req.url)
+            .map(|(s, _)| s)
+            .unwrap_or_else(|| "instagram".to_string());
+        match crate::config::cookies::capture_chromium(&browser, &[site_key], "scrapmf") {
+            Ok((path, _)) => {
+                req.cookies_file = Some(path);
+                req.cookies_from_browser = None;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "cookie capture failed on Windows");
+                req.cookies_from_browser = None;
+                return Err(anyhow::anyhow!(e));
+            }
+        }
+    }
+
     let mut archive_keys: std::collections::HashSet<String> = Default::default();
     // (our entries JSONL, the store this provider was actually given)
     let mut archive_files: Option<(std::path::PathBuf, std::path::PathBuf)> = None;
