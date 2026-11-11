@@ -15,14 +15,35 @@ pub(super) fn write_atomic(path: &Path, content: &str) -> anyhow::Result<()> {
         std::process::id(),
         unique
     ));
-    if let Err(e) = std::fs::write(&tmp, content) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e).with_context(|| format!("write {}", tmp.display()));
-    }
+    // Create the temp file with owner-only permissions (0o600) BEFORE writing
+    // any content, so a crash/TOCTOU window cannot leave a world-readable
+    // cookie/config snapshot in a shared directory.
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&tmp)
+            .inspect_err(|_| {
+                let _ = std::fs::remove_file(&tmp);
+            })
+            .with_context(|| format!("create {}", tmp.display()))?;
+        use std::io::Write;
+        f.write_all(content.as_bytes())
+            .inspect_err(|_| {
+                let _ = std::fs::remove_file(&tmp);
+            })
+            .with_context(|| format!("write {}", tmp.display()))?;
+        let _ = f.sync_all();
+    }
+    #[cfg(not(unix))]
+    {
+        if let Err(e) = std::fs::write(&tmp, content) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e).with_context(|| format!("write {}", tmp.display()));
+        }
     }
     // Best-effort fsync to reduce the chance of a half-written file on crash.
     if let Ok(f) = std::fs::OpenOptions::new().write(true).open(&tmp) {
