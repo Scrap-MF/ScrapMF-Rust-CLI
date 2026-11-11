@@ -97,7 +97,8 @@ pub fn run(
             .map(|(k, _)| (*k).clone())
             .unwrap_or_else(|| "instagram".to_string());
         if let Some(browser) = cookies_from_browser.clone() {
-            match crate::config::cookies::capture_chromium(&browser, &[site_key], "scrapmf") {
+            let auto_name = crate::config::cookies::auto_profile_name(&browser);
+            match crate::config::cookies::capture_chromium(&browser, &[site_key], &auto_name) {
                 Ok((path, _)) => {
                     cookies_file = Some(path);
                     cookies_from_browser = None;

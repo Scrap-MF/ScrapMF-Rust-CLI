@@ -123,6 +123,45 @@ pub fn validate_output_path(path: &std::path::Path) -> anyhow::Result<()> {
             path.display()
         );
     }
+    // Resolve symlinks (best-effort) so a path that escapes via a symlink to a
+    // protected root is still rejected. Canonicalize the path if it exists, or
+    // its nearest existing ancestor otherwise.
+    let to_check = if expanded.exists() {
+        std::fs::canonicalize(&expanded).unwrap_or_else(|_| expanded.clone())
+    } else {
+        // Walk up to find an existing ancestor to canonicalize.
+        let mut cur = expanded.clone();
+        while !cur.exists() {
+            match cur.parent() {
+                Some(p) => cur = p.to_path_buf(),
+                None => break,
+            }
+        }
+        if cur.exists() {
+            let canon = std::fs::canonicalize(&cur).unwrap_or_else(|_| cur.clone());
+            // Re-append the non-existing tail.
+            let tail = expanded.strip_prefix(&cur).unwrap_or(&expanded);
+            canon.join(tail)
+        } else {
+            expanded.clone()
+        }
+    };
+    for root in PROTECTED_ROOTS {
+        let protected = if *root == "/" {
+            to_check == std::path::Path::new("/")
+        } else {
+            to_check.starts_with(root)
+        };
+        if protected {
+            anyhow::bail!(
+                "{}",
+                crate::i18n::tf(
+                    "scraper_output_path_protected",
+                    &[("path", &path.display().to_string()), ("root", root)],
+                )
+            );
+        }
+    }
     Ok(())
 }
 
@@ -189,7 +228,13 @@ pub fn validate_cookies_file(path: &std::path::Path) -> anyhow::Result<()> {
             )
         );
     }
-    // Check readable and not world-readable is optional warn, but check exists
+    // Cookies files are credentials: tighten permissions to owner-only on Unix
+    // (best-effort) so a world-readable cookies.txt is not left behind.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
     let md = std::fs::metadata(path)?;
     if md.len() == 0 {
         anyhow::bail!(

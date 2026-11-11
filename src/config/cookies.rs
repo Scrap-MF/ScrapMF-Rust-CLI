@@ -506,8 +506,12 @@ pub fn capture_firefox(sites: &[String], profile_name: &str) -> Result<(PathBuf,
     let db = newest_firefox_cookie_db()
         .ok_or("no Firefox cookies.sqlite found (~/.mozilla/firefox/*/cookies.sqlite)")?;
 
-    let tmp = std::env::temp_dir().join(format!("scrapmf-ff-{}.sqlite", std::process::id()));
+    // Copy into a private, randomly-named temp directory (0o700) so other
+    // users cannot guess or pre-create the path (symlink/TOCTOU hardening).
+    let tmp_dir = tempfile::TempDir::new().map_err(|e| format!("create temp dir: {e}"))?;
+    let tmp = tmp_dir.path().join("cookies.sqlite");
     std::fs::copy(&db, &tmp).map_err(|e| format!("copy cookies db: {e}"))?;
+    crate::config::fs::restrict_perms(&tmp, false);
 
     let result = (|| {
         let rows = sqlite_read_rows(
@@ -554,7 +558,8 @@ pub fn capture_firefox(sites: &[String], profile_name: &str) -> Result<(PathBuf,
         Ok((path, count))
     })();
 
-    let _ = std::fs::remove_file(&tmp);
+    // tmp lives inside tmp_dir, which is dropped here and cleans up.
+    let _ = tmp_dir;
     result
 }
 
@@ -1188,6 +1193,9 @@ if __name__ == '__main__':
         .as_slice()
         .try_into()
         .map_err(|_| format!("DPAPI returned {} bytes, expected 32", key_bytes.len()))?;
+    use zeroize::Zeroize;
+    let mut kb = key_bytes;
+    kb.zeroize();
 
     Ok(chromium_safestorage_core::RecoveredKey::Aes256Gcm(key))
 }
@@ -1276,11 +1284,11 @@ pub fn capture_chromium(
     let candidate_keys =
         chromium_candidate_keys(paths.secret_apps, paths.kwallet_folders, paths.kwallet_key);
 
-    let tmp = std::env::temp_dir().join(format!(
-        "scrapmf-cookies-{}-{}.sqlite",
-        browser,
-        std::process::id()
-    ));
+    // Copy into a private, randomly-named temp directory (0o700) so other
+    // users cannot guess or pre-create the path (symlink/TOCTOU hardening).
+    let tmp_dir = tempfile::TempDir::new().map_err(|e| format!("create temp dir: {e}"))?;
+    let tmp = tmp_dir.path().join("cookies.sqlite");
+    crate::config::fs::restrict_perms(tmp_dir.path(), true);
     // Robust copy: browsers keep the DB (and its -wal/-shm sidecars) open and
     // locked on Windows, so a plain copy can fail with a sharing violation or
     // produce an incomplete snapshot. Retry a few times with backoff, and copy
@@ -1575,8 +1583,9 @@ pub fn capture_chromium(
             let tried = format!(
                 "Windows cookie capture failed for {} (profile {}, {}-packed)\n  \
                  db: {} (cookie schema v{}, {matching_encrypted} encrypted cookie(s) for this site)\n  \
-                 hint: make sure the browser profile belongs to the same Windows user running scrapmf,\n  \
-                 and that Local State contains os_crypt.encrypted_key",
+                 note: if the browser is Chrome/Brave 127+ the cookies use app-bound encryption,\n  \
+                 which cannot be unlocked from outside the browser; in that case import manually\n  \
+                 (Get cookies.txt LOCALLY -> Export) or use Firefox",
                 paths.display,
                 if paths.profile.is_empty() {
                     "-"
@@ -1625,6 +1634,7 @@ pub fn capture_chromium(
             // An unreachable keyring needs different advice from a locked one:
             // exporting a D-Bus variable cannot help when the socket lives in
             // another namespace, so the keyring-free path is offered first.
+            #[cfg(not(windows))]
             if bus.is_none() && needs_keyring {
                 return Err(keyring_unreachable_error(paths.display));
             }
@@ -1647,8 +1657,10 @@ pub fn capture_chromium(
                     "no cookies could be decrypted for {}\n  \
                      {tried}\n  \
                      DPAPI/AES-GCM: {decrypt_err}\n  \
-                     help: or import manually: install \"Get cookies.txt LOCALLY\" in the browser → Export →\n  \
-                     Configuration → Cookie profiles → Import → From file",
+                     help: if the browser is Chrome/Brave 127+, cookies use app-bound encryption and\n  \
+                     cannot be decrypted externally — import manually (Get cookies.txt LOCALLY -> Export)\n  \
+                     or use Firefox; otherwise verify the profile belongs to the same Windows user\n  \
+                     and that Local State contains os_crypt.encrypted_key",
                     domains.join(", "),
                 ));
             }
@@ -1673,7 +1685,9 @@ pub fn capture_chromium(
         Ok((path, count))
     })();
 
-    let _ = std::fs::remove_file(&tmp);
+    // tmp lives inside tmp_dir, which is dropped here and cleans up (incl.
+    // any -wal/-shm sidecars).
+    let _ = tmp_dir;
     result
 }
 

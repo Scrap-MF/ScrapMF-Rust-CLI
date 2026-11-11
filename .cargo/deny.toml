@@ -1,6 +1,7 @@
 [graph]
 targets = [
     { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "x86_64-pc-windows-msvc" },
 ]
 # cargo-deny >= 0.18: feature selection lives here, not on the CLI
 all-features = true

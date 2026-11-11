@@ -340,11 +340,23 @@ pub fn profile_roots(ch: &BrowserChannel) -> Vec<Root> {
 fn windows_rel_dirs(ch: &BrowserChannel) -> &'static [&'static str] {
     match ch.id {
         "brave" => &["BraveSoftware/Brave-Browser/User Data"],
-        "brave-origin" => &["BraveSoftware/Brave-Browser/User Data"],
+        // Brave Origin keeps its own User Data dir on Windows; fall back to the
+        // stable dir only for installs that share it (mirrors Linux/macOS
+        // rel_dirs and gallery-dl's dual-directory probe).
+        "brave-origin" => &[
+            "BraveSoftware/Brave-Origin/User Data",
+            "BraveSoftware/Brave-Browser/User Data",
+        ],
         "brave-beta" => &["BraveSoftware/Brave-Browser-Beta/User Data"],
         "brave-nightly" => &["BraveSoftware/Brave-Browser-Nightly/User Data"],
-        "brave-origin-beta" => &["BraveSoftware/Brave-Browser-Beta/User Data"],
-        "brave-origin-nightly" => &["BraveSoftware/Brave-Browser-Nightly/User Data"],
+        "brave-origin-beta" => &[
+            "BraveSoftware/Brave-Origin-Beta/User Data",
+            "BraveSoftware/Brave-Browser-Beta/User Data",
+        ],
+        "brave-origin-nightly" => &[
+            "BraveSoftware/Brave-Origin-Nightly/User Data",
+            "BraveSoftware/Brave-Browser-Nightly/User Data",
+        ],
         "chrome" => &["Google/Chrome/User Data"],
         "chromium" => &["Chromium/User Data"],
         "edge" => &["Microsoft/Edge/User Data"],
@@ -394,7 +406,12 @@ fn newest_cookie_db(root: &Path, filename: &str) -> Option<(PathBuf, String)> {
         };
         for entry in entries.flatten() {
             let p = entry.path();
-            if p.is_dir() {
+            // Do not follow symlinks: a crafted profile tree must not escape
+            // the expected root or create traversal/DoS cycles.
+            let is_real_dir = std::fs::symlink_metadata(&p)
+                .map(|m| m.file_type().is_dir() && !m.file_type().is_symlink())
+                .unwrap_or(false);
+            if is_real_dir {
                 stack.push(p);
             } else if p.file_name().is_some_and(|n| n == filename)
                 && let Ok(md) = std::fs::metadata(&p)

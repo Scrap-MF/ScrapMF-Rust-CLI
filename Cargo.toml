@@ -41,7 +41,9 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 base64 = "0.23.1"
 pbkdf2 = "0.13.0"
 memchr = "2"
+tempfile = "3.27.0"
 hex = "0.4"
+zeroize = "1"
 # Cross-platform Chromium cookie key recovery + AES-128-CBC / AES-256-GCM
 # decryption. Used on Windows to unwrap the DPAPI-protected `Local State` key
 # and decrypt `v10`/`v20` cookie values; also lets Linux share one decrypt path.
@@ -69,7 +71,7 @@ codegen-units = 1
 opt-level = "z"
 panic = "abort"
 debug = false
-overflow-checks = false
+overflow-checks = true
 
 [lints.rust]
 unsafe_code = "forbid"
