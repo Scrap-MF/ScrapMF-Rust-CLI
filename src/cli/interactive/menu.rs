@@ -240,7 +240,10 @@ fn draw_boxed(
                 Constraint::Length(if help.is_empty() { 0 } else { 1 }),
             ])
             .split(inner);
-            f.render_widget(Paragraph::new(body), chunks[0]);
+            f.render_widget(
+                Paragraph::new(body).wrap(ratatui::widgets::Wrap { trim: true }),
+                chunks[0],
+            );
             if !help.is_empty() {
                 f.render_widget(
                     Paragraph::new(ratatui::text::Line::styled(

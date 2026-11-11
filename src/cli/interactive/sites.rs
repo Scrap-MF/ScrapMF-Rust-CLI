@@ -586,7 +586,13 @@ fn create_profile_wizard() {
             ),
             crate::i18n::t("cookie_files_grant_access_warning"),
         ]),
-        Err(e) => notice(&[crate::i18n::tf("error_x", &[("e", &e.to_string())])]),
+        Err(e) => {
+            let mut lines: Vec<String> = e.to_string().lines().map(|l| l.to_string()).collect();
+            if lines.is_empty() {
+                lines.push(e.to_string());
+            }
+            notice(&lines)
+        }
     }
 }
 
