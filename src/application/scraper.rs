@@ -454,6 +454,35 @@ pub fn scrape_with_hooks(
         }
     }
 
+    // Flatpak capture-first: browsers installed as Flatpaks (e.g. brave-origin
+    // on Arch/Garuda) cannot be read by browser-cookie3 (the plugin's
+    // --cookies-from-browser) because their runtime Python is not visible to
+    // the host. Capture their cookies directly into a Netscape file, like the
+    // Windows path, so gallery-dl / the plugins never see a source they cannot
+    // use.
+    if req.cookies_file.is_none()
+        && let Some(browser) = req.cookies_from_browser.clone()
+        && crate::config::cookies::is_flatpak_browser(&browser)
+    {
+        let site_key = crate::application::archive::site_account_from_url(&req.url)
+            .map(|(s, _)| s)
+            .unwrap_or_else(|| "instagram".to_string());
+        match crate::config::cookies::capture_chromium(&browser, &[site_key], "scrapmf") {
+            Ok((path, _)) => {
+                req.cookies_file = Some(path);
+                req.cookies_from_browser = None;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "cookie capture failed for Flatpak browser");
+                req.cookies_from_browser = None;
+                return Err(anyhow::anyhow!(
+                    "could not read cookies from Flatpak browser '{browser}': {e}. \
+                     Export a cookies.txt manually (ElDevoraCucas) and pass --cookies."
+                ));
+            }
+        }
+    }
+
     let mut archive_keys: std::collections::HashSet<String> = Default::default();
     // (our entries JSONL, the store this provider was actually given)
     let mut archive_files: Option<(std::path::PathBuf, std::path::PathBuf)> = None;

@@ -76,7 +76,11 @@ impl Provider for Threadstractor {
             args.push(OsString::from("--cookies"));
             args.push(file.as_os_str().to_owned());
         }
-        if let Some(ref browser) = req.cookies_from_browser {
+        // Flatpak browsers cannot be read by browser-cookie3 (see
+        // tikstractormf provider). scrapmf captures their cookies upstream.
+        if let Some(ref browser) = req.cookies_from_browser
+            && !crate::config::cookies::is_flatpak_browser(browser)
+        {
             args.push(OsString::from("--cookies-from-browser"));
             args.push(OsString::from(browser));
         }

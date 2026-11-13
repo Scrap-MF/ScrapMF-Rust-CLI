@@ -1227,6 +1227,25 @@ fn resolve_python_binary() -> std::path::PathBuf {
     std::path::PathBuf::from("python")
 }
 
+/// Whether `browser` is installed as a Flatpak on this machine.
+///
+/// Flatpak browsers keep their profile under `~/.var/app/<flatpak_id>` and
+/// their runtime Python is not visible to the host, so `browser-cookie3`
+/// (used by the tiktok/threads plugins' `--cookies-from-browser`) cannot
+/// read them. scrapmf captures their cookies directly instead.
+pub fn is_flatpak_browser(browser: &str) -> bool {
+    let Some(ch) = crate::browsers::resolve_channel(browser) else {
+        return false;
+    };
+    let Some(fp_id) = ch.flatpak_id else {
+        return false;
+    };
+    let Some(home) = crate::browsers::home() else {
+        return false;
+    };
+    home.join(".var").join("app").join(fp_id).is_dir()
+}
+
 pub fn capture_chromium(
     browser: &str,
     sites: &[String],

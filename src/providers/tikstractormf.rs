@@ -37,7 +37,13 @@ impl Provider for Tikstractormf {
             args.push(OsString::from("--cookies"));
             args.push(file.as_os_str().to_owned());
         }
-        if let Some(ref browser) = req.cookies_from_browser {
+        // Flatpak browsers cannot be read by browser-cookie3 (the plugin's
+        // --cookies-from-browser): their runtime Python is not visible to the
+        // host. scrapmf captures their cookies into a file upstream and clears
+        // cookies_from_browser, so only forward this when it is NOT a Flatpak.
+        if let Some(ref browser) = req.cookies_from_browser
+            && !crate::config::cookies::is_flatpak_browser(browser)
+        {
             args.push(OsString::from("--cookies-from-browser"));
             args.push(OsString::from(browser));
         }
